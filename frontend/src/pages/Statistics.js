@@ -53,7 +53,7 @@ const Statistics = () => {
       const spendingData = spendingRes.data;
       
       // 获取按类别分组的数据
-      const categoryRes = await statisticsAPI.getSpendingByCategory();
+      const categoryRes = await statisticsAPI.getSpendingByCategory(timeframe);
       const categoryData = categoryRes.data;
       
       // 处理类别数据用于饼图
@@ -61,24 +61,34 @@ const Statistics = () => {
       const categoryAmounts = [];
       const categoryColors = [];
       const categoryBorders = [];
+      const subscriptionCounts = [];
       
       categoryData.forEach((item, index) => {
         const category = item.category || '未分类';
         const amount = item.total_amount || 0;
+        const count = item.subscription_count || 0;
         
         categories.push(category);
         categoryAmounts.push(amount);
+        subscriptionCounts.push(count);
         
         const color = getRandomColor(index);
         categoryColors.push(color + '99'); // 添加透明度
         categoryBorders.push(color);
       });
       
-      // 处理月度趋势数据（这需要后端支持，此处模拟）
-      // 实际项目中应从后端获取
-      const months = ['一月', '二月', '三月', '四月', '五月', '六月', 
-                     '七月', '八月', '九月', '十月', '十一月', '十二月'];
-      const randomData = months.map(() => Math.floor(Math.random() * 1000) + 100);
+      // 获取月度趋势数据
+      const trendRes = await statisticsAPI.getMonthlyTrend();
+      const trendData = trendRes.data;
+      
+      // 处理趋势数据
+      const months = [];
+      const monthlyData = [];
+      
+      trendData.forEach(item => {
+        months.push(item.label);
+        monthlyData.push(item.amount);
+      });
       
       setStats({
         totalSpending: { 
@@ -101,11 +111,12 @@ const Statistics = () => {
           datasets: [
             {
               label: timeframe === 'monthly' ? '月支出 (CNY)' : '年支出 (CNY)',
-              data: randomData,
+              data: monthlyData,
               backgroundColor: 'rgba(14, 165, 233, 0.6)',
             },
           ],
         },
+        subscriptionCounts: subscriptionCounts
       });
     } catch (error) {
       console.error('Error fetching statistics:', error);
@@ -298,8 +309,7 @@ const Statistics = () => {
                   <tr key={category} className="hover:bg-gray-50 dark:hover:bg-dark-600">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{category}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {/* 这里应该是实际的订阅数量，此处模拟 */}
-                      {Math.floor(Math.random() * 5) + 1}
+                      {stats.subscriptionCounts[index]}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-right">
                       {formatCurrency(amount)}
@@ -316,9 +326,7 @@ const Statistics = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">总计</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {/* 总订阅数量 */}
-                  {stats.categoryData.datasets[0].data.reduce((a, b, i) => {
-                    return a + (Math.floor(Math.random() * 5) + 1);
-                  }, 0)}
+                  {stats.subscriptionCounts ? stats.subscriptionCounts.reduce((a, b) => a + b, 0) : 0}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white text-right">
                   {formatCurrency(stats.totalSpending.amount)}

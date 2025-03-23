@@ -6,6 +6,9 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# 获取脚本所在目录
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
 echo -e "${BLUE}====================================${NC}"
 echo -e "${BLUE}  订阅跟踪器启动脚本  ${NC}"
 echo -e "${BLUE}====================================${NC}"
@@ -19,12 +22,12 @@ fi
 
 # 安装后端依赖
 echo -e "\n${GREEN}正在安装后端依赖...${NC}"
-cd backend
+cd "$SCRIPT_DIR/backend"
 npm install
 
 # 安装前端依赖
 echo -e "\n${GREEN}正在安装前端依赖...${NC}"
-cd ../frontend
+cd "$SCRIPT_DIR/frontend"
 npm install
 
 # 创建tmux会话并分割窗口
@@ -40,10 +43,10 @@ then
     tmux split-window -v
 
     # 在上半部分窗口中启动后端
-    tmux send-keys -t subscription-tracker:0.0 "cd /Users/shine/Projects/subscription-tracker/backend && npm start" C-m
+    tmux send-keys -t subscription-tracker:0.0 "cd \"$SCRIPT_DIR/backend\" && npm start" C-m
 
     # 在下半部分窗口中启动前端
-    tmux send-keys -t subscription-tracker:0.1 "cd /Users/shine/Projects/subscription-tracker/frontend && npm start" C-m
+    tmux send-keys -t subscription-tracker:0.1 "cd \"$SCRIPT_DIR/frontend\" && npm start" C-m
 
     # 附加到tmux会话
     echo -e "${GREEN}使用tmux启动应用成功！${NC}"
@@ -55,8 +58,8 @@ then
 else
     # 如果没有tmux，则使用普通方式启动（不推荐，需要开两个终端）
     echo -e "${YELLOW}未检测到tmux，请使用两个终端窗口分别运行以下命令：${NC}"
-    echo -e "${GREEN}终端1: cd /Users/shine/Projects/subscription-tracker/backend && npm start${NC}"
-    echo -e "${GREEN}终端2: cd /Users/shine/Projects/subscription-tracker/frontend && npm start${NC}"
+    echo -e "${GREEN}终端1: cd \"$SCRIPT_DIR/backend\" && npm start${NC}"
+    echo -e "${GREEN}终端2: cd \"$SCRIPT_DIR/frontend\" && npm start${NC}"
 fi
 
 echo -e "\n${GREEN}启动完成！${NC}"

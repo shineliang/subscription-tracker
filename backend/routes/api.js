@@ -230,7 +230,18 @@ router.get('/statistics/yearly', (req, res) => {
 
 // 按类别获取花费
 router.get('/statistics/by-category', (req, res) => {
-  Subscription.getSpendingByCategory((err, stats) => {
+  const timeframe = req.query.timeframe || 'monthly';
+  Subscription.getSpendingByCategory(timeframe, (err, stats) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(stats);
+  });
+});
+
+// 获取月度趋势数据
+router.get('/statistics/monthly-trend', (req, res) => {
+  Subscription.getMonthlyTrend((err, stats) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }

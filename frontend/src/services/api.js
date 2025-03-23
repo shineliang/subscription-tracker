@@ -39,7 +39,10 @@ export const statisticsAPI = {
   getYearlySpending: () => api.get('/statistics/yearly'),
   
   // 按类别获取花费
-  getSpendingByCategory: () => api.get('/statistics/by-category'),
+  getSpendingByCategory: (timeframe = 'monthly') => api.get(`/statistics/by-category?timeframe=${timeframe}`),
+  
+  // 获取月度趋势数据
+  getMonthlyTrend: () => api.get('/statistics/monthly-trend'),
 };
 
 // 通知设置相关API
