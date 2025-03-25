@@ -286,60 +286,62 @@ router.post('/parse-subscription', async (req, res) => {
     // 使用createMessages函数生成包含当前日期的消息
     const messages = createMessages(description);
     
-    const response = await axios.post('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
-      model: "qwen-max-latest",
-      messages: messages,
-      functions: [
-        {
-          name: "extract_subscription_info",
-          description: "从用户描述中提取订阅信息",
-          parameters: {
-            type: "object",
-            properties: {
-              name: {
+    const response = await axios.post(
+      process.env.OPENAI_API_BASE || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+      {
+        model: process.env.OPENAI_API_MODEL || "qwen-max-latest",
+        messages: messages,
+        functions: [
+          {
+            name: "extract_subscription_info",
+            description: "从用户描述中提取订阅信息",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "订阅服务名称"
+                },
+                provider: {
+                  type: "string",
+                  description: "服务提供商"
+                },
+                amount: {
+                  type: "number",
+                  description: "金额"
+                },
+                currency: {
+                  type: "string",
+                  description: "货币单位，默认CNY"
+                },
+                billing_cycle: {
                 type: "string",
-                description: "订阅服务名称"
+                description: "计费周期: monthly, half_yearly, yearly, quarterly, weekly, daily"
+                },
+                start_date: {
+                  type: "string",
+                  description: "开始日期，格式YYYY-MM-DD"
+                },
+                next_payment_date: {
+                  type: "string",
+                  description: "下次付款日期，格式YYYY-MM-DD"
+                },
+                category: {
+                  type: "string",
+                  description: "订阅类别，如软件、娱乐、工具等"
+                }
               },
-              provider: {
-                type: "string",
-                description: "服务提供商"
-              },
-              amount: {
-                type: "number",
-                description: "金额"
-              },
-              currency: {
-                type: "string",
-                description: "货币单位，默认CNY"
-              },
-              billing_cycle: {
-              type: "string",
-              description: "计费周期: monthly, half_yearly, yearly, quarterly, weekly, daily"
-              },
-              start_date: {
-                type: "string",
-                description: "开始日期，格式YYYY-MM-DD"
-              },
-              next_payment_date: {
-                type: "string",
-                description: "下次付款日期，格式YYYY-MM-DD"
-              },
-              category: {
-                type: "string",
-                description: "订阅类别，如软件、娱乐、工具等"
-              }
-            },
-            required: ["name", "amount", "billing_cycle"]
+              required: ["name", "amount", "billing_cycle"]
+            }
           }
+        ],
+        function_call: { name: "extract_subscription_info" }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
         }
-      ],
-      function_call: { name: "extract_subscription_info" }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+      });
     
     const functionCall = response.data.choices[0].message.function_call;
     const parsedInfo = JSON.parse(functionCall.arguments);
