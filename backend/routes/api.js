@@ -5,6 +5,11 @@ const Reminder = require('../models/reminder');
 const NotificationSetting = require('../models/notificationSetting');
 const axios = require('axios');
 const moment = require('moment');
+const { Parser } = require('json2csv');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+const fs = require('fs');
+const { parse } = require('csv-parse');
 
 // 计算下一个付款日期并完善订阅信息
 function extract_subscription_info(subscriptionInfo) {
@@ -355,6 +360,151 @@ router.post('/parse-subscription', async (req, res) => {
   } catch (error) {
     console.error('解析订阅信息失败:', error);
     res.status(500).json({ error: '解析订阅信息失败', details: error.message });
+  }
+});
+
+// 导出所有订阅数据
+router.get('/export-data', async (req, res) => {
+  try {
+    // 获取所有订阅数据
+    Subscription.getAll((err, subscriptions) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      
+      // 定义CSV字段
+      const fields = [
+        'id',
+        'name',
+        'description',
+        'provider',
+        'amount',
+        'currency',
+        'billing_cycle',
+        'start_date',
+        'next_payment_date',
+        'reminder_days',
+        'cycle_count',
+        'active',
+        'created_at',
+        'updated_at'
+      ];
+      
+      // 创建CSV解析器
+      const json2csvParser = new Parser({ fields });
+      
+      // 转换为CSV
+      const csv = json2csvParser.parse(subscriptions);
+      
+      // 设置响应头
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=subscriptions.csv');
+      
+      // 发送CSV数据
+      res.send(csv);
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 导入订阅数据
+router.post('/import-data', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: '没有上传文件' });
+    }
+
+    const parser = parse({
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      cast: true
+    });
+
+    const records = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    // 创建解析器流
+    parser.on('readable', function() {
+      let record;
+      while ((record = parser.read()) !== null) {
+        // 移除id字段，因为这是新导入的数据
+        delete record.id;
+        // 移除created_at和updated_at字段，让数据库自动生成
+        delete record.created_at;
+        delete record.updated_at;
+        
+        // 处理数值类型
+        if (record.amount) {
+          record.amount = parseFloat(record.amount);
+        }
+        if (record.reminder_days) {
+          record.reminder_days = parseInt(record.reminder_days);
+        }
+        if (record.cycle_count) {
+          record.cycle_count = parseInt(record.cycle_count);
+        }
+        if (record.active !== undefined) {
+          record.active = parseInt(record.active);
+        }
+        
+        records.push(record);
+      }
+    });
+
+    // 处理解析完成
+    parser.on('end', async function() {
+      // 使用Promise.all处理所有导入
+      const importPromises = records.map(subscription => {
+        return new Promise((resolve) => {
+          const processedSubscription = extract_subscription_info(subscription);
+          Subscription.create(processedSubscription, (err) => {
+            if (err) {
+              console.error('导入订阅失败:', err);
+              errorCount++;
+            } else {
+              successCount++;
+            }
+            resolve();
+          });
+        });
+      });
+
+      await Promise.all(importPromises);
+
+      // 删除临时文件
+      fs.unlinkSync(req.file.path);
+
+      res.json({
+        message: '导入完成',
+        total: records.length,
+        success: successCount,
+        error: errorCount
+      });
+    });
+
+    // 处理解析错误
+    parser.on('error', function(err) {
+      console.error('解析CSV文件失败:', err);
+      // 如果文件存在，删除临时文件
+      if (req.file) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ error: '解析CSV文件失败' });
+    });
+
+    // 开始解析文件
+    fs.createReadStream(req.file.path).pipe(parser);
+
+  } catch (error) {
+    console.error('导入数据失败:', error);
+    // 如果文件存在，删除临时文件
+    if (req.file) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -43,3 +43,4 @@ Thumbs.db
 # 杂项
 .cache/
 .temp/
+subscriptions_*.csv

@@ -7,10 +7,14 @@ import {
   ClockIcon,
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
+  DocumentIcon
 } from '@heroicons/react/24/outline';
 import Loader from '../components/Loader';
 import { notificationAPI } from '../services/api';
+import axios from 'axios';
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
@@ -220,53 +224,91 @@ const Settings = () => {
           </div>
         </div>
         
-        {/* 数据管理（模拟功能） */}
+        {/* 数据管理 */}
         <div className="p-6">
           <div className="flex items-center mb-4">
-            <ExclamationTriangleIcon className="h-6 w-6 text-yellow-500 mr-2" />
+            <DocumentIcon className="h-6 w-6 text-primary-500 mr-2" />
             <h2 className="text-lg font-semibold text-dark-600 dark:text-white">数据管理</h2>
           </div>
           
           <div className="space-y-4">
-            <div>
-              <p className="text-gray-700 dark:text-gray-300">
-                导出所有订阅数据或从备份文件导入
-              </p>
-              <div className="mt-3 flex space-x-3">
+            <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
+              {/* 导出数据 */}
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await axios.get('/api/export-data', {
+                      responseType: 'blob'
+                    });
+                    
+                    // 创建下载链接
+                    const url = window.URL.createObjectURL(new Blob([response.data]));
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.setAttribute('download', `subscriptions_${new Date().toISOString().split('T')[0]}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    
+                    toast.success('数据导出成功');
+                  } catch (error) {
+                    console.error('导出数据失败:', error);
+                    toast.error('导出数据失败，请稍后重试');
+                  }
+                }}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                导出数据
+              </button>
+              
+              {/* 导入数据 */}
+              <div className="relative">
+                <input
+                  type="file"
+                  id="file-upload"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    
+                    try {
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      
+                      const response = await axios.post('/api/import-data', formData, {
+                        headers: {
+                          'Content-Type': 'multipart/form-data'
+                        }
+                      });
+                      
+                      toast.success(`导入完成：成功${response.data.success}条，失败${response.data.error}条`);
+                      
+                      // 清空文件选择
+                      e.target.value = '';
+                    } catch (error) {
+                      console.error('导入数据失败:', error);
+                      toast.error('导入数据失败，请检查文件格式是否正确');
+                      
+                      // 清空文件选择
+                      e.target.value = '';
+                    }
+                  }}
+                />
                 <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => toast.info('功能开发中...')}
+                  onClick={() => document.getElementById('file-upload').click()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 >
-                  导出数据
-                </button>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => toast.info('功能开发中...')}
-                >
+                  <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
                   导入数据
                 </button>
               </div>
             </div>
             
-            <div className="pt-4 border-t border-gray-200 dark:border-dark-600">
-              <p className="text-gray-700 dark:text-gray-300">
-                危险操作区域
-              </p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                以下操作无法撤销，请谨慎操作
-              </p>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={() => toast.warning('此功能已禁用，请联系管理员')}
-                >
-                  清除所有数据
-                </button>
-              </div>
-            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              导出的数据将以CSV格式保存，包含所有订阅信息。导入时请确保CSV文件格式正确。
+            </p>
           </div>
         </div>
       </motion.div>
