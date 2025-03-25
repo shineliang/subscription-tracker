@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // 布局组件
 import Layout from './components/Layout';
+import Login from './components/Login';
 
 // 页面组件
 import Dashboard from './pages/Dashboard';
@@ -14,6 +15,12 @@ import EditSubscription from './pages/EditSubscription';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+
+// 受保护的路由组件
+const ProtectedRoute = ({ children }) => {
+  const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -46,7 +53,15 @@ function App() {
         theme={darkMode ? 'dark' : 'light'}
       />
       <Routes>
-        <Route path="/" element={<Layout darkMode={darkMode} setDarkMode={setDarkMode} />}>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout darkMode={darkMode} setDarkMode={setDarkMode} />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="subscriptions" element={<SubscriptionList />} />
           <Route path="subscriptions/add" element={<AddSubscription />} />

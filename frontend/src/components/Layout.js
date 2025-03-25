@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   HomeIcon, 
   ListBulletIcon, 
@@ -10,12 +10,14 @@ import {
   SunIcon,
   MoonIcon,
   Bars3Icon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 const Layout = ({ darkMode, setDarkMode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   
   const navigation = [
     { name: '仪表盘', icon: HomeIcon, href: '/' },
@@ -27,6 +29,11 @@ const Layout = ({ darkMode, setDarkMode }) => {
   
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleDarkMode = () => setDarkMode(!darkMode);
+  
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated');
+    navigate('/login');
+  };
   
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-dark-800 transition-colors duration-300">
@@ -111,7 +118,7 @@ const Layout = ({ darkMode, setDarkMode }) => {
           <div className="p-4 border-t dark:border-dark-600">
             <button
               onClick={toggleDarkMode}
-              className="flex items-center w-full px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-600"
+              className="flex items-center w-full px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-600 mb-2"
             >
               {darkMode ? (
                 <>
@@ -124,6 +131,13 @@ const Layout = ({ darkMode, setDarkMode }) => {
                   切换暗色模式
                 </>
               )}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center w-full px-3 py-2 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3" />
+              退出登录
             </button>
           </div>
         </div>
