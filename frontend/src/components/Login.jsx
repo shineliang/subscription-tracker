@@ -12,7 +12,7 @@ const Login = () => {
     if (username === 'shine' && password === '777888') {
       // 登录成功
       localStorage.setItem('isAuthenticated', 'true');
-      navigate('/dashboard'); // 登录成功后跳转到仪表板页面
+      navigate('/'); // 修改为重定向到根路由，也就是仪表板页面
     } else {
       setError('用户名或密码错误');
     }
