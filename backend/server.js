@@ -85,7 +85,7 @@ function sendEmailReminders(email, reminders) {
   
   // 设置邮件服务配置
   const transporter = nodemailer.createTransport({
-    service: 'gmail',  // 使用您选择的邮件服务
+    service: 'qq',  // 使用您选择的邮件服务
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
