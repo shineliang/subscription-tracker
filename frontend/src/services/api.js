@@ -63,9 +63,11 @@ export const llmAPI = {
   parseSubscription: (description) => api.post('/parse-subscription', { description }),
 };
 
-export default {
+const apiService = {
   subscription: subscriptionAPI,
   statistics: statisticsAPI,
   notification: notificationAPI,
   llm: llmAPI,
 };
+
+export default apiService;
