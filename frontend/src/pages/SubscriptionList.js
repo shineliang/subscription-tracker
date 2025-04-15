@@ -8,7 +8,8 @@ import {
   MagnifyingGlassIcon,
   ListBulletIcon,
   Squares2X2Icon,
-  ArrowsUpDownIcon
+  ArrowsUpDownIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import SubscriptionCard from '../components/SubscriptionCard';
 import Loader from '../components/Loader';
@@ -123,6 +124,15 @@ const SubscriptionList = () => {
     } finally {
       setConfirmDialog({ isOpen: false, id: null });
     }
+  };
+  
+  // 处理订阅续费后的更新
+  const handleSubscriptionRenew = (updatedSubscription) => {
+    // 更新订阅列表中的订阅数据
+    const updatedSubscriptions = subscriptions.map(sub => 
+      sub.id === updatedSubscription.id ? updatedSubscription : sub
+    );
+    setSubscriptions(updatedSubscriptions);
   };
   
   const getUniqueCategories = () => {
@@ -260,6 +270,7 @@ const SubscriptionList = () => {
                 key={subscription.id}
                 subscription={subscription}
                 onDelete={handleDelete}
+                onUpdate={handleSubscriptionRenew}
               />
             ))}
           </div>
@@ -340,6 +351,22 @@ const SubscriptionList = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex justify-end space-x-3">
+                          <button
+                            onClick={async () => {
+                              try {
+                                const response = await subscriptionAPI.renew(subscription.id);
+                                toast.success('订阅已成功续费一个周期');
+                                handleSubscriptionRenew(response.data);
+                              } catch (error) {
+                                console.error('续费失败:', error);
+                                toast.error('续费失败，请稍后再试');
+                              }
+                            }}
+                            className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                            title="续费一个周期"
+                          >
+                            续费
+                          </button>
                           <Link 
                             to={`/subscriptions/edit/${subscription.id}`}
                             className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"

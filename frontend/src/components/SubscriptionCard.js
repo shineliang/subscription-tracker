@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrency, formatDate, formatBillingCycle, daysUntil, getReminderStatus, getReminderStatusClass, getReminderStatusText } from '../services/utils';
 import { motion } from 'framer-motion';
-import { PencilIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { subscriptionAPI } from '../services/api';
+import { toast } from 'react-toastify';
 
-const SubscriptionCard = ({ subscription, onDelete }) => {
+const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
+  const [isRenewing, setIsRenewing] = useState(false);
   const {
     id,
     name,
@@ -82,6 +85,27 @@ const SubscriptionCard = ({ subscription, onDelete }) => {
             </div>
             
             <div className="flex space-x-2">
+              {/* 续费按钮 */}
+              <button
+                onClick={async () => {
+                  try {
+                    setIsRenewing(true);
+                    const response = await subscriptionAPI.renew(id);
+                    toast.success('订阅已成功续费一个周期');
+                    if (onUpdate) onUpdate(response.data);
+                  } catch (error) {
+                    console.error('续费失败:', error);
+                    toast.error('续费失败，请稍后再试');
+                  } finally {
+                    setIsRenewing(false);
+                  }
+                }}
+                disabled={isRenewing}
+                className="p-1 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400"
+                title="续费一个周期"
+              >
+                <ArrowPathIcon className={`h-5 w-5 ${isRenewing ? 'animate-spin' : ''}`} />
+              </button>
               <Link 
                 to={`/subscriptions/edit/${id}`}
                 className="p-1 text-gray-500 hover:text-primary-500 dark:text-gray-400 dark:hover:text-primary-400"

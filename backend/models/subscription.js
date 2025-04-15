@@ -174,6 +174,25 @@ class Subscription {
       callback(null, rows);
     });
   }
+  
+  // 获取已过期但未续费的订阅
+  static getExpired(callback) {
+    const today = moment().format('YYYY-MM-DD');
+    
+    const query = `
+      SELECT * FROM subscriptions 
+      WHERE next_payment_date < ?
+      AND active = 1
+      ORDER BY next_payment_date ASC
+    `;
+    
+    db.all(query, [today], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      callback(null, rows);
+    });
+  }
 
   // 计算每月花费
   static getMonthlySpending(callback) {

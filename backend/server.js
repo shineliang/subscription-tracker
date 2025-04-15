@@ -49,27 +49,55 @@ cron.schedule('0 9 * * *', () => {
       return console.error('获取提醒失败:', err);
     }
     
-    if (reminders.length === 0) {
-      return console.log('没有需要发送的提醒');
-    }
-    
-    // 获取通知设置
-    NotificationSetting.get((settingsErr, settings) => {
-      if (settingsErr) {
-        return console.error('获取通知设置失败:', settingsErr);
+    // 获取已过期但未续费的订阅
+    const today = moment().format('YYYY-MM-DD');
+    Subscription.getExpired((expiredErr, expiredSubscriptions) => {
+      if (expiredErr) {
+        console.error('获取已过期订阅失败:', expiredErr);
+        // 继续处理常规提醒
       }
       
-      // 如果启用了邮件通知并设置了邮箱
-      if (settings.email_notifications && settings.email) {
-        sendEmailReminders(settings.email, reminders);
+      // 合并常规提醒和过期提醒
+      let allReminders = [...reminders];
+      
+      if (expiredSubscriptions && expiredSubscriptions.length > 0) {
+        // 将过期订阅转换为提醒格式
+        const expiredReminders = expiredSubscriptions.map(subscription => ({
+          id: `expired-${subscription.id}`,
+          subscription_id: subscription.id,
+          name: subscription.name,
+          amount: subscription.amount,
+          currency: subscription.currency,
+          next_payment_date: subscription.next_payment_date,
+          isExpired: true, // 标记为已过期
+          daysOverdue: moment(today).diff(moment(subscription.next_payment_date), 'days')
+        }));
+        
+        allReminders = [...allReminders, ...expiredReminders];
       }
       
-      // 标记提醒为已发送
-      reminders.forEach(reminder => {
-        Reminder.markAsSent(reminder.id, (markErr) => {
-          if (markErr) {
-            console.error(`标记提醒 ${reminder.id} 为已发送失败:`, markErr);
-          }
+      if (allReminders.length === 0) {
+        return console.log('没有需要发送的提醒');
+      }
+      
+      // 获取通知设置
+      NotificationSetting.get((settingsErr, settings) => {
+        if (settingsErr) {
+          return console.error('获取通知设置失败:', settingsErr);
+        }
+        
+        // 如果启用了邮件通知并设置了邮箱
+        if (settings.email_notifications && settings.email) {
+          sendEmailReminders(settings.email, allReminders);
+        }
+        
+        // 仅标记常规提醒为已发送（过期提醒每天都会发送）
+        reminders.forEach(reminder => {
+          Reminder.markAsSent(reminder.id, (markErr) => {
+            if (markErr) {
+              console.error(`标记提醒 ${reminder.id} 为已发送失败:`, markErr);
+            }
+          });
         });
       });
     });
@@ -92,16 +120,19 @@ function sendEmailReminders(email, reminders) {
     }
   });
   
+  // 分离常规提醒和已过期提醒
+  const upcomingReminders = reminders.filter(r => !r.isExpired);
+  const expiredReminders = reminders.filter(r => r.isExpired);
+  
   // 构建邮件内容
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: '订阅即将到期提醒',
-    html: `
-      <h2>订阅到期提醒</h2>
-      <p>您有以下订阅即将到期：</p>
+  let htmlContent = `<h2>订阅管理提醒</h2>`;
+  
+  // 添加即将到期的订阅
+  if (upcomingReminders.length > 0) {
+    htmlContent += `
+      <h3>即将到期的订阅：</h3>
       <ul>
-        ${reminders.map(reminder => `
+        ${upcomingReminders.map(reminder => `
           <li>
             <strong>${reminder.name}</strong> - 
             金额: ${reminder.amount} ${reminder.currency} - 
@@ -109,8 +140,33 @@ function sendEmailReminders(email, reminders) {
           </li>
         `).join('')}
       </ul>
-      <p>请登录订阅管理系统查看详情或更新订阅信息。</p>
-    `
+    `;
+  }
+  
+  // 添加已过期的订阅
+  if (expiredReminders.length > 0) {
+    htmlContent += `
+      <h3>已过期的订阅：</h3>
+      <ul>
+        ${expiredReminders.map(reminder => `
+          <li>
+            <strong>${reminder.name}</strong> - 
+            金额: ${reminder.amount} ${reminder.currency} - 
+            已过期: ${reminder.daysOverdue}天
+          </li>
+        `).join('')}
+      </ul>
+      <p><strong>请注意：</strong> 过期订阅需要及时处理，您可以登录系统续费或取消这些订阅。</p>
+    `;
+  }
+  
+  htmlContent += `<p>请登录订阅管理系统查看详情或更新订阅信息。</p>`;
+  
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject: '订阅管理通知 - ' + (expiredReminders.length > 0 ? '有订阅已过期' : '订阅即将到期'),
+    html: htmlContent
   };
   
   // 发送邮件

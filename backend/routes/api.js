@@ -201,6 +201,76 @@ router.delete('/subscriptions/:id', (req, res) => {
   });
 });
 
+// 续费订阅（延长下次付款日期一个周期）
+router.post('/subscriptions/:id/renew', (req, res) => {
+  const subscriptionId = req.params.id;
+  
+  // 获取订阅信息
+  Subscription.getById(subscriptionId, (err, subscription) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!subscription) {
+      return res.status(404).json({ error: '订阅不存在' });
+    }
+    
+    // 根据订阅周期计算新的下次付款日期
+    const currentPaymentDate = moment(subscription.next_payment_date);
+    let cycleCount = subscription.cycle_count || 1;
+    let newPaymentDate;
+    
+    switch (subscription.billing_cycle) {
+      case 'monthly':
+        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'months').format('YYYY-MM-DD');
+        break;
+      case 'yearly':
+        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'years').format('YYYY-MM-DD');
+        break;
+      case 'half_yearly':
+        newPaymentDate = currentPaymentDate.clone().add(6 * cycleCount, 'months').format('YYYY-MM-DD');
+        break;
+      case 'quarterly':
+        newPaymentDate = currentPaymentDate.clone().add(3 * cycleCount, 'months').format('YYYY-MM-DD');
+        break;
+      case 'weekly':
+        newPaymentDate = currentPaymentDate.clone().add(7 * cycleCount, 'days').format('YYYY-MM-DD');
+        break;
+      case 'daily':
+        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'days').format('YYYY-MM-DD');
+        break;
+      default:
+        newPaymentDate = currentPaymentDate.clone().add(1, 'months').format('YYYY-MM-DD');
+    }
+    
+    // 更新订阅的下次付款日期
+    subscription.next_payment_date = newPaymentDate;
+    
+    Subscription.update(subscriptionId, subscription, (updateErr, updatedSubscription) => {
+      if (updateErr) {
+        return res.status(500).json({ error: updateErr.message });
+      }
+      
+      // 更新提醒
+      Reminder.updateForSubscription(
+        updatedSubscription.id,
+        updatedSubscription.next_payment_date,
+        updatedSubscription.reminder_days,
+        (reminderErr) => {
+          if (reminderErr) {
+            console.error('更新提醒失败:', reminderErr);
+          }
+        }
+      );
+      
+      res.json({
+        ...updatedSubscription,
+        message: '订阅已成功续费一个周期'
+      });
+    });
+  });
+});
+
 // 获取即将到期的订阅
 router.get('/subscriptions/upcoming/:days', (req, res) => {
   const days = parseInt(req.params.days) || 7;

@@ -28,6 +28,9 @@ export const subscriptionAPI = {
   
   // 获取即将到期的订阅
   getUpcoming: (days = 7) => api.get(`/subscriptions/upcoming/${days}`),
+  
+  // 续费订阅（延长下次付款日期一个周期）
+  renew: (id) => api.post(`/subscriptions/${id}/renew`),
 };
 
 // 统计相关API
