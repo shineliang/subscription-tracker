@@ -17,6 +17,7 @@ import SubscriptionDetail from './pages/SubscriptionDetail';
 import PaymentHistory from './pages/PaymentHistory';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
+import ChangePassword from './pages/ChangePassword';
 import BudgetManagement from './pages/BudgetManagement';
 import IntelligentAnalysis from './pages/IntelligentAnalysis';
 import NotFound from './pages/NotFound';
@@ -87,6 +88,7 @@ function App() {
           <Route path="budgets" element={<BudgetManagement />} />
           <Route path="analysis" element={<IntelligentAnalysis />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="change-password" element={<ChangePassword />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

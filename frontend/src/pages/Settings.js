@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
 import {
@@ -10,7 +11,9 @@ import {
   ArrowPathIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
-  DocumentIcon
+  DocumentIcon,
+  KeyIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import Loader from '../components/Loader';
 import { notificationAPI } from '../services/api';
@@ -221,6 +224,45 @@ const Settings = () => {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               添加新订阅时的默认货币
             </p>
+          </div>
+        </div>
+        
+        {/* 账户安全 */}
+        <div className="p-6">
+          <div className="flex items-center mb-4">
+            <ShieldCheckIcon className="h-6 w-6 text-primary-500 mr-2" />
+            <h2 className="text-lg font-semibold text-dark-600 dark:text-white">账户安全</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-center">
+                <KeyIcon className="h-5 w-5 text-gray-400 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    修改密码
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    定期更换密码以保护账户安全
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/change-password"
+                className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 focus:outline-none focus:underline"
+              >
+                修改密码
+              </Link>
+            </div>
+            
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="font-medium mb-2">安全提示：</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>使用强密码，包含字母、数字和特殊字符</li>
+                <li>不要在多个网站使用相同的密码</li>
+                <li>定期更换密码，建议每3个月更换一次</li>
+              </ul>
+            </div>
           </div>
         </div>
         
