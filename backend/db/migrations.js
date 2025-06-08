@@ -257,6 +257,88 @@ class DatabaseMigration {
       });
     });
   }
+
+  // 迁移4: 添加订阅历史记录表
+  async migration_004_add_subscription_history_tables() {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 创建订阅变更历史表
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS subscription_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subscription_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            change_type TEXT NOT NULL, -- 'created', 'updated', 'cancelled', 'reactivated'
+            field_name TEXT, -- 具体变更的字段名
+            old_value TEXT, -- 旧值
+            new_value TEXT, -- 新值
+            change_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT, -- 备注
+            FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+        `, (err) => {
+          if (err) {
+            this.db.run('ROLLBACK');
+            return reject(err);
+          }
+          
+          // 创建付款历史表
+          this.db.run(`
+            CREATE TABLE IF NOT EXISTS payment_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              subscription_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              amount DECIMAL(10,2) NOT NULL,
+              currency TEXT DEFAULT 'CNY',
+              payment_date DATE NOT NULL,
+              payment_method TEXT, -- '支付宝', '微信', '信用卡', '银行转账', '其他'
+              status TEXT DEFAULT 'completed', -- 'completed', 'pending', 'failed'
+              notes TEXT,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE,
+              FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+          `, (err2) => {
+            if (err2) {
+              this.db.run('ROLLBACK');
+              return reject(err2);
+            }
+            
+            // 创建索引以提高查询性能
+            this.db.run('CREATE INDEX IF NOT EXISTS idx_subscription_history_subscription_id ON subscription_history(subscription_id)');
+            this.db.run('CREATE INDEX IF NOT EXISTS idx_subscription_history_user_id ON subscription_history(user_id)');
+            this.db.run('CREATE INDEX IF NOT EXISTS idx_payment_history_subscription_id ON payment_history(subscription_id)');
+            this.db.run('CREATE INDEX IF NOT EXISTS idx_payment_history_user_id ON payment_history(user_id)');
+            this.db.run('CREATE INDEX IF NOT EXISTS idx_payment_history_payment_date ON payment_history(payment_date)');
+            
+            // 为现有订阅创建初始历史记录
+            this.db.run(`
+              INSERT INTO subscription_history (subscription_id, user_id, change_type, notes)
+              SELECT id, user_id, 'created', '从旧系统迁移'
+              FROM subscriptions
+            `, (err3) => {
+              if (err3) {
+                this.db.run('ROLLBACK');
+                return reject(err3);
+              }
+              
+              this.db.run('COMMIT', (commitErr) => {
+                if (commitErr) {
+                  this.db.run('ROLLBACK');
+                  reject(commitErr);
+                } else {
+                  resolve();
+                }
+              });
+            });
+          });
+        });
+      });
+    });
+  }
 }
 
 module.exports = DatabaseMigration;

@@ -12,7 +12,8 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  UserCircleIcon
+  UserCircleIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import { authAPI } from '../services/api';
 
@@ -25,6 +26,7 @@ const Layout = ({ darkMode, setDarkMode }) => {
     { name: '仪表盘', icon: HomeIcon, href: '/' },
     { name: '所有订阅', icon: ListBulletIcon, href: '/subscriptions' },
     { name: '添加订阅', icon: PlusIcon, href: '/subscriptions/add' },
+    { name: '付款历史', icon: CurrencyDollarIcon, href: '/payments' },
     { name: '统计分析', icon: ChartBarIcon, href: '/statistics' },
     { name: '设置', icon: Cog6ToothIcon, href: '/settings' },
   ];

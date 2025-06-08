@@ -141,6 +141,37 @@ export const dataAPI = {
   },
 };
 
+// 历史记录相关API
+export const historyAPI = {
+  // 订阅历史
+  subscription: {
+    // 获取某个订阅的历史记录
+    getBySubscriptionId: (subscriptionId) => api.get(`/subscriptions/${subscriptionId}/history`),
+    
+    // 获取所有订阅历史
+    getAll: (limit = 100, offset = 0) => api.get(`/subscription-history?limit=${limit}&offset=${offset}`),
+  },
+  
+  // 付款历史
+  payment: {
+    // 记录付款
+    record: (paymentData) => api.post('/payments', paymentData),
+    
+    // 获取某个订阅的付款历史
+    getBySubscriptionId: (subscriptionId) => api.get(`/subscriptions/${subscriptionId}/payments`),
+    
+    // 获取所有付款历史
+    getAll: (limit = 100, offset = 0) => api.get(`/payments?limit=${limit}&offset=${offset}`),
+    
+    // 获取指定时间段的付款历史
+    getByDateRange: (startDate, endDate) => 
+      api.get(`/payments/date-range?start_date=${startDate}&end_date=${endDate}`),
+    
+    // 获取付款统计
+    getStats: (year) => api.get(`/payments/stats/${year}`),
+  },
+};
+
 const apiService = {
   auth: authAPI,
   subscription: subscriptionAPI,
@@ -148,6 +179,7 @@ const apiService = {
   notification: notificationAPI,
   llm: llmAPI,
   data: dataAPI,
+  history: historyAPI,
 };
 
 export default apiService;

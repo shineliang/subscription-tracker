@@ -37,7 +37,14 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
       <div className="flex flex-col h-full">
         <div className="p-5 flex-1">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-dark-600 dark:text-white truncate">{name}</h3>
+            <Link 
+              to={`/subscriptions/${id}`} 
+              className="flex-1 min-w-0 mr-2 group"
+            >
+              <h3 className="text-lg font-semibold text-dark-600 dark:text-white truncate group-hover:text-primary-600 transition-colors">
+                {name}
+              </h3>
+            </Link>
             <div className={`px-2 py-1 text-xs font-medium rounded ${statusClass}`}>
               {statusText}
             </div>

@@ -87,7 +87,9 @@ const Statistics = () => {
       
       trendData.forEach(item => {
         months.push(item.label);
-        monthlyData.push(item.amount);
+        // 处理amount对象，获取CNY值
+        const amount = item.amount && item.amount.CNY ? item.amount.CNY : 0;
+        monthlyData.push(Math.round(amount * 100) / 100); // 保留两位小数
       });
       
       setStats({

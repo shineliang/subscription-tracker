@@ -13,6 +13,8 @@ import Dashboard from './pages/Dashboard';
 import SubscriptionList from './pages/SubscriptionList';
 import AddSubscription from './pages/AddSubscription';
 import EditSubscription from './pages/EditSubscription';
+import SubscriptionDetail from './pages/SubscriptionDetail';
+import PaymentHistory from './pages/PaymentHistory';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
@@ -77,6 +79,8 @@ function App() {
           <Route path="subscriptions" element={<SubscriptionList />} />
           <Route path="subscriptions/add" element={<AddSubscription />} />
           <Route path="subscriptions/edit/:id" element={<EditSubscription />} />
+          <Route path="subscriptions/:id" element={<SubscriptionDetail />} />
+          <Route path="payments" element={<PaymentHistory />} />
           <Route path="statistics" element={<Statistics />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />

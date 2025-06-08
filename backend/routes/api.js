@@ -296,6 +296,22 @@ router.post('/subscriptions/:id/renew', authenticateToken, validateId, (req, res
         }
       );
       
+      // 记录付款历史
+      const PaymentHistory = require('../models/paymentHistory');
+      PaymentHistory.recordPayment({
+        subscription_id: subscriptionId,
+        user_id: req.user.id,
+        amount: subscription.amount,
+        currency: subscription.currency,
+        payment_date: currentPaymentDate.format('YYYY-MM-DD'),
+        payment_method: req.body.payment_method || null,
+        notes: req.body.notes || '手动续费'
+      }, (paymentErr) => {
+        if (paymentErr) {
+          console.error('记录付款历史失败:', paymentErr);
+        }
+      });
+      
       res.json({
         ...updatedSubscription,
         message: '订阅已成功续费一个周期'
@@ -640,6 +656,113 @@ router.post('/import-data', authenticateToken, upload.single('file'), async (req
     cleanupFile();
     res.status(500).json({ error: error.message });
   }
+});
+
+// ========== 订阅历史相关 API ==========
+
+// 获取订阅的历史记录
+router.get('/subscriptions/:id/history', authenticateToken, validateId, (req, res) => {
+  const SubscriptionHistory = require('../models/subscriptionHistory');
+  
+  SubscriptionHistory.getBySubscriptionId(req.params.id, req.user.id, (err, history) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(history);
+  });
+});
+
+// 获取用户的所有历史记录
+router.get('/subscription-history', authenticateToken, (req, res) => {
+  const SubscriptionHistory = require('../models/subscriptionHistory');
+  const limit = parseInt(req.query.limit) || 100;
+  const offset = parseInt(req.query.offset) || 0;
+  
+  SubscriptionHistory.getAllByUser(req.user.id, limit, offset, (err, history) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(history);
+  });
+});
+
+// ========== 付款历史相关 API ==========
+
+// 记录付款
+router.post('/payments', authenticateToken, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  const paymentData = {
+    ...req.body,
+    user_id: req.user.id
+  };
+  
+  // 验证必填字段
+  if (!paymentData.subscription_id || !paymentData.amount || !paymentData.payment_date) {
+    return res.status(400).json({ error: '缺少必填字段' });
+  }
+  
+  PaymentHistory.recordPayment(paymentData, (err, payment) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.status(201).json(payment);
+  });
+});
+
+// 获取订阅的付款历史
+router.get('/subscriptions/:id/payments', authenticateToken, validateId, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  
+  PaymentHistory.getBySubscriptionId(req.params.id, req.user.id, (err, payments) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(payments);
+  });
+});
+
+// 获取用户的所有付款历史
+router.get('/payments', authenticateToken, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  const limit = parseInt(req.query.limit) || 100;
+  const offset = parseInt(req.query.offset) || 0;
+  
+  PaymentHistory.getAllByUser(req.user.id, limit, offset, (err, payments) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(payments);
+  });
+});
+
+// 获取指定时间段的付款历史
+router.get('/payments/date-range', authenticateToken, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  const { start_date, end_date } = req.query;
+  
+  if (!start_date || !end_date) {
+    return res.status(400).json({ error: '请提供开始日期和结束日期' });
+  }
+  
+  PaymentHistory.getByDateRange(req.user.id, start_date, end_date, (err, payments) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(payments);
+  });
+});
+
+// 获取付款统计
+router.get('/payments/stats/:year', authenticateToken, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  const year = parseInt(req.params.year) || new Date().getFullYear();
+  
+  PaymentHistory.getPaymentStats(req.user.id, year, (err, stats) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(stats);
+  });
 });
 
 module.exports = router;

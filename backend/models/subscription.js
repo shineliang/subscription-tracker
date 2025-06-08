@@ -1,5 +1,7 @@
 const db = require('../db/database');
 const moment = require('moment');
+const SubscriptionHistory = require('./subscriptionHistory');
+const PaymentHistory = require('./paymentHistory');
 
 class Subscription {
   // 获取用户的所有订阅
@@ -110,65 +112,119 @@ class Subscription {
         if (err) {
           return callback(err, null);
         }
-        callback(null, { id: this.lastID, ...subscription });
+        const newSubscription = { id: this.lastID, ...subscription };
+        
+        // 记录创建历史
+        SubscriptionHistory.recordChange(
+          newSubscription.id, 
+          user_id, 
+          'created', 
+          null,
+          '新建订阅',
+          (histErr) => {
+            if (histErr) {
+              console.error('记录订阅历史失败:', histErr);
+            }
+          }
+        );
+        
+        callback(null, newSubscription);
       }
     );
   }
 
   // 更新订阅（验证用户权限）
   static updateByUser(id, userId, subscription, callback) {
-    const {
-      name,
-      description,
-      provider,
-      amount,
-      currency,
-      billing_cycle,
-      cycle_count,
-      start_date,
-      next_payment_date,
-      reminder_days,
-      category,
-      active
-    } = subscription;
+    // 首先获取旧的订阅数据以记录变更
+    this.getByIdAndUser(id, userId, (err, oldSubscription) => {
+      if (err) return callback(err);
+      if (!oldSubscription) return callback(new Error('订阅不存在或无权限'));
+      
+      const {
+        name,
+        description,
+        provider,
+        amount,
+        currency,
+        billing_cycle,
+        cycle_count,
+        start_date,
+        next_payment_date,
+        reminder_days,
+        category,
+        active
+      } = subscription;
 
-    const query = `
-      UPDATE subscriptions 
-      SET name = ?, description = ?, provider = ?, amount = ?, 
-          currency = ?, billing_cycle = ?, cycle_count = ?, 
-          start_date = ?, next_payment_date = ?, reminder_days = ?, 
-          category = ?, active = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?
-    `;
-    
-    db.run(
-      query, 
-      [
-        name, 
-        description, 
-        provider, 
-        amount, 
-        currency, 
-        billing_cycle, 
-        cycle_count || 1, 
-        start_date, 
-        next_payment_date, 
-        reminder_days || 7, 
-        category, 
-        active || 1,
-        id,
-        userId
-      ], 
-      function(err) {
-        if (err) {
-          return callback(err, null);
+      const query = `
+        UPDATE subscriptions 
+        SET name = ?, description = ?, provider = ?, amount = ?, 
+            currency = ?, billing_cycle = ?, cycle_count = ?, 
+            start_date = ?, next_payment_date = ?, reminder_days = ?, 
+            category = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+      `;
+      
+      db.run(
+        query, 
+        [
+          name, 
+          description, 
+          provider, 
+          amount, 
+          currency, 
+          billing_cycle, 
+          cycle_count || 1, 
+          start_date, 
+          next_payment_date, 
+          reminder_days || 7, 
+          category, 
+          active !== undefined ? active : 1,
+          id,
+          userId
+        ], 
+        function(err) {
+          if (err) {
+            return callback(err, null);
+          }
+          if (this.changes === 0) {
+            return callback(new Error('订阅不存在或无权限'), null);
+          }
+          
+          // 记录变更历史
+          const changes = {};
+          const fieldsToTrack = ['name', 'amount', 'currency', 'billing_cycle', 'provider', 'category', 'active'];
+          
+          fieldsToTrack.forEach(field => {
+            const newValue = subscription[field];
+            const oldValue = oldSubscription[field];
+            
+            if (newValue !== undefined && newValue !== oldValue) {
+              changes[field] = {
+                oldValue: oldValue,
+                newValue: newValue
+              };
+            }
+          });
+          
+          if (Object.keys(changes).length > 0) {
+            SubscriptionHistory.recordChange(
+              id,
+              userId,
+              'updated',
+              changes,
+              null,
+              (histErr) => {
+                if (histErr) {
+                  console.error('记录订阅历史失败:', histErr);
+                }
+              }
+            );
+          }
+          
+          callback(null, { id, ...subscription });
         }
-        if (this.changes === 0) {
-          return callback(new Error('订阅不存在或无权限'), null);
-        }
-        callback(null, { id, ...subscription });
-      }
-    );
+      );
+    });
   }
   
   // 更新订阅（不验证用户）
@@ -232,18 +288,39 @@ class Subscription {
     );
   }
 
-  // 删除订阅（验证用户权限）
+  // 删除订阅（验证用户权限）- 实际上是软删除
   static deleteByUser(id, userId, callback) {
-    const query = `DELETE FROM subscriptions WHERE id = ? AND user_id = ?`;
-    
-    db.run(query, [id, userId], function(err) {
-      if (err) {
-        return callback(err, null);
-      }
-      if (this.changes === 0) {
-        return callback(new Error('订阅不存在或无权限'), null);
-      }
-      callback(null, { id, deleted: true });
+    // 先检查订阅是否存在
+    this.getByIdAndUser(id, userId, (err, subscription) => {
+      if (err) return callback(err);
+      if (!subscription) return callback(new Error('订阅不存在或无权限'));
+      
+      const query = `UPDATE subscriptions SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`;
+      
+      db.run(query, [id, userId], function(err) {
+        if (err) {
+          return callback(err, null);
+        }
+        if (this.changes === 0) {
+          return callback(new Error('订阅不存在或无权限'), null);
+        }
+        
+        // 记录取消历史
+        SubscriptionHistory.recordChange(
+          id,
+          userId,
+          'cancelled',
+          null,
+          '订阅已取消',
+          (histErr) => {
+            if (histErr) {
+              console.error('记录订阅历史失败:', histErr);
+            }
+          }
+        );
+        
+        callback(null, { id, deleted: true });
+      });
     });
   }
   
@@ -669,94 +746,139 @@ class Subscription {
 
   // 获取用户的月度趋势数据
   static getMonthlyTrendByUser(userId, callback) {
+    const PaymentHistory = require('./paymentHistory');
     const months = 12; // 获取过去12个月的数据
     const results = [];
+    const promises = [];
     
     // 生成过去12个月的月份列表
-    for (let i = 0; i < months; i++) {
+    for (let i = months - 1; i >= 0; i--) {
       const monthDate = moment().subtract(i, 'months');
       const monthName = monthDate.format('YYYY-MM');
-      const monthStart = monthDate.startOf('month').format('YYYY-MM-DD');
-      const monthEnd = monthDate.endOf('month').format('YYYY-MM-DD');
+      const monthStart = monthDate.clone().startOf('month').format('YYYY-MM-DD');
+      const monthEnd = monthDate.clone().endOf('month').format('YYYY-MM-DD');
       
-      results.push({
+      const monthData = {
         month: monthName,
         label: monthDate.format('YYYY年M月'),
         monthStart: monthStart,
-        monthEnd: monthEnd
-      });
+        monthEnd: monthEnd,
+        amount: { CNY: 0 },
+        subscriptionCounts: 0
+      };
+      
+      results.push(monthData);
+      
+      // 获取该月的实际付款记录
+      promises.push(new Promise((resolve) => {
+        PaymentHistory.getByDateRange(userId, monthStart, monthEnd, (err, payments) => {
+          if (!err && payments) {
+            let monthTotal = 0;
+            const uniqueSubscriptions = new Set();
+            
+            payments.forEach(payment => {
+              if (payment.status === 'completed') {
+                // 转换非CNY货币
+                if (payment.currency === 'CNY') {
+                  monthTotal += parseFloat(payment.amount);
+                } else {
+                  monthTotal += parseFloat(payment.amount) * 7; // 简单汇率转换
+                }
+                uniqueSubscriptions.add(payment.subscription_id);
+              }
+            });
+            
+            monthData.amount.CNY = monthTotal;
+            monthData.subscriptionCounts = uniqueSubscriptions.size;
+          }
+          resolve();
+        });
+      }));
     }
     
-    // 查询用户的所有活跃订阅
-    const query = `
-      SELECT 
-        id,
-        name,
-        amount,
-        currency,
-        billing_cycle,
-        start_date,
-        next_payment_date
-      FROM subscriptions
-      WHERE active = 1 AND user_id = ?
-    `;
     
-    db.all(query, [userId], (err, subscriptions) => {
-      if (err) {
-        return callback(err, null);
-      }
+    // 等待所有付款历史查询完成
+    Promise.all(promises).then(() => {
+      // 如果没有付款记录，则使用预估方式计算
+      const hasPaymentData = results.some(month => month.amount.CNY > 0);
       
-      // 计算每个订阅在每个月的支出
-      results.forEach(month => {
-        const monthlyCosts = {};
+      if (!hasPaymentData) {
+        // 查询用户的所有活跃订阅进行预估
+        const query = `
+          SELECT 
+            id,
+            name,
+            amount,
+            currency,
+            billing_cycle,
+            start_date,
+            next_payment_date
+          FROM subscriptions
+          WHERE active = 1 AND user_id = ?
+        `;
         
-        subscriptions.forEach(sub => {
-          // 检查订阅在当前月是否应该计算（开始日期早于或等于月末）
-          const startDate = moment(sub.start_date);
-          const monthEnd = moment(month.monthEnd);
-          
-          if (startDate.isSameOrBefore(monthEnd)) {
-            // 根据计费周期计算该月应该的支出
-            let monthlyAmount = 0;
-            
-            switch (sub.billing_cycle) {
-              case 'monthly':
-                monthlyAmount = sub.amount;
-                break;
-              case 'yearly':
-                monthlyAmount = sub.amount / 12;
-                break;
-              case 'half_yearly':
-                monthlyAmount = sub.amount / 6;
-                break;
-              case 'quarterly':
-                monthlyAmount = sub.amount / 3;
-                break;
-              case 'weekly':
-                monthlyAmount = sub.amount * 4.33;
-                break;
-              case 'daily':
-                monthlyAmount = sub.amount * 30.44;
-                break;
-            }
-            
-            if (!monthlyCosts[sub.currency]) {
-              monthlyCosts[sub.currency] = 0;
-            }
-            monthlyCosts[sub.currency] += monthlyAmount;
+        db.all(query, [userId], (err, subscriptions) => {
+          if (err) {
+            return callback(err, null);
           }
+          
+          // 计算每个订阅在每个月的预估支出
+          results.forEach(month => {
+            let monthTotal = 0;
+            const activeSubscriptions = [];
+            
+            subscriptions.forEach(sub => {
+              // 检查订阅在当前月是否应该计算（开始日期早于或等于月末）
+              const startDate = moment(sub.start_date);
+              const monthEnd = moment(month.monthEnd);
+              
+              if (startDate.isSameOrBefore(monthEnd)) {
+                activeSubscriptions.push(sub);
+                // 根据计费周期计算该月应该的支出
+                let monthlyAmount = 0;
+                
+                switch (sub.billing_cycle) {
+                  case 'monthly':
+                    monthlyAmount = sub.amount;
+                    break;
+                  case 'yearly':
+                    monthlyAmount = sub.amount / 12;
+                    break;
+                  case 'half_yearly':
+                    monthlyAmount = sub.amount / 6;
+                    break;
+                  case 'quarterly':
+                    monthlyAmount = sub.amount / 3;
+                    break;
+                  case 'weekly':
+                    monthlyAmount = sub.amount * 4.33;
+                    break;
+                  case 'daily':
+                    monthlyAmount = sub.amount * 30.44;
+                    break;
+                }
+                
+                // 转换非CNY货币
+                if (sub.currency === 'CNY') {
+                  monthTotal += monthlyAmount;
+                } else {
+                  monthTotal += monthlyAmount * 7; // 简单汇率转换
+                }
+              }
+            });
+            
+            month.amount.CNY = Math.round(monthTotal * 100) / 100;
+            month.subscriptionCounts = activeSubscriptions.length;
+          });
+          
+          callback(null, results);
         });
-        
-        month.amount = monthlyCosts;
-        month.subscriptionCounts = subscriptions.filter(sub => 
-          moment(sub.start_date).isSameOrBefore(month.monthEnd)
-        ).length;
-      });
-      
-      // 反转数组，使最早的月份在前
-      results.reverse();
-      
-      callback(null, results);
+      } else {
+        // 有付款记录，直接返回
+        callback(null, results);
+      }
+    }).catch(err => {
+      callback(err, null);
     });
   }
 }
