@@ -17,6 +17,7 @@ import SubscriptionDetail from './pages/SubscriptionDetail';
 import PaymentHistory from './pages/PaymentHistory';
 import Statistics from './pages/Statistics';
 import Settings from './pages/Settings';
+import BudgetManagement from './pages/BudgetManagement';
 import NotFound from './pages/NotFound';
 
 // 受保护的路由组件
@@ -82,6 +83,7 @@ function App() {
           <Route path="subscriptions/:id" element={<SubscriptionDetail />} />
           <Route path="payments" element={<PaymentHistory />} />
           <Route path="statistics" element={<Statistics />} />
+          <Route path="budgets" element={<BudgetManagement />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Route>

@@ -843,4 +843,173 @@ router.get('/payments/stats/:year', authenticateToken, (req, res) => {
   });
 });
 
+// ========== 预算管理相关 API ==========
+const Budget = require('../models/budget');
+
+// 获取所有预算
+router.get('/budgets', authenticateToken, (req, res) => {
+  Budget.getAllByUser(req.user.id, (err, budgets) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(budgets);
+  });
+});
+
+// 获取单个预算
+router.get('/budgets/:id', authenticateToken, validateId, (req, res) => {
+  Budget.getByIdAndUser(req.params.id, req.user.id, (err, budget) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (!budget) {
+      return res.status(404).json({ error: '预算不存在' });
+    }
+    res.json(budget);
+  });
+});
+
+// 创建新预算
+router.post('/budgets', authenticateToken, (req, res) => {
+  const { name, type, period, amount, currency, category, warning_threshold } = req.body;
+  
+  // 验证必填字段
+  if (!name || !type || !period || !amount) {
+    return res.status(400).json({ error: '缺少必填字段' });
+  }
+  
+  // 验证type和period的值
+  if (!['total', 'category'].includes(type)) {
+    return res.status(400).json({ error: '无效的预算类型' });
+  }
+  
+  if (!['monthly', 'yearly'].includes(period)) {
+    return res.status(400).json({ error: '无效的预算周期' });
+  }
+  
+  // 如果是分类预算，必须指定类别
+  if (type === 'category' && !category) {
+    return res.status(400).json({ error: '分类预算必须指定类别' });
+  }
+  
+  // 检查是否已存在相同类型的预算
+  Budget.getByTypeAndPeriod(req.user.id, type, period, category, (err, existing) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (existing && existing.is_active) {
+      return res.status(400).json({ error: '已存在相同类型的预算' });
+    }
+    
+    const budget = {
+      user_id: req.user.id,
+      name,
+      type,
+      period,
+      amount: parseFloat(amount),
+      currency: currency || 'CNY',
+      category: type === 'category' ? category : null,
+      warning_threshold: warning_threshold || 80
+    };
+    
+    Budget.create(budget, (err, newBudget) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json(newBudget);
+    });
+  });
+});
+
+// 更新预算
+router.put('/budgets/:id', authenticateToken, validateId, (req, res) => {
+  const { name, amount, currency, warning_threshold, is_active } = req.body;
+  
+  if (!name || amount === undefined) {
+    return res.status(400).json({ error: '缺少必填字段' });
+  }
+  
+  const budget = {
+    name,
+    amount: parseFloat(amount),
+    currency,
+    warning_threshold,
+    is_active
+  };
+  
+  Budget.updateByUser(req.params.id, req.user.id, budget, (err, updatedBudget) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(updatedBudget);
+  });
+});
+
+// 删除预算
+router.delete('/budgets/:id', authenticateToken, validateId, (req, res) => {
+  Budget.deleteByUser(req.params.id, req.user.id, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(result);
+  });
+});
+
+// 获取预算使用情况
+router.get('/budgets/:id/usage', authenticateToken, validateId, (req, res) => {
+  Budget.getBudgetUsage(req.user.id, req.params.id, (err, usage) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(usage);
+  });
+});
+
+// 获取所有预算的使用情况
+router.get('/budgets-usage', authenticateToken, (req, res) => {
+  Budget.getAllBudgetUsage(req.user.id, (err, usages) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(usages);
+  });
+});
+
+// 检查并创建预算警告
+router.post('/budgets/check-alerts', authenticateToken, (req, res) => {
+  Budget.checkAndCreateAlerts(req.user.id, (err, alerts) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(alerts);
+  });
+});
+
+// 获取未读预算警告
+router.get('/budget-alerts', authenticateToken, (req, res) => {
+  Budget.getUnreadAlerts(req.user.id, (err, alerts) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(alerts);
+  });
+});
+
+// 标记预算警告为已读
+router.put('/budget-alerts/mark-read', authenticateToken, (req, res) => {
+  const { alertIds } = req.body;
+  
+  if (!alertIds || !Array.isArray(alertIds)) {
+    return res.status(400).json({ error: '请提供要标记的警告ID数组' });
+  }
+  
+  Budget.markAlertsAsRead(req.user.id, alertIds, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(result);
+  });
+});
+
 module.exports = router;

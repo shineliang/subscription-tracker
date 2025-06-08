@@ -13,12 +13,13 @@ import StatCard from '../components/StatCard';
 import SubscriptionCard from '../components/SubscriptionCard';
 import Loader from '../components/Loader';
 import EmptyState from '../components/EmptyState';
-import { subscriptionAPI, statisticsAPI } from '../services/api';
+import { subscriptionAPI, statisticsAPI, budgetAPI } from '../services/api';
 import { formatCurrency } from '../services/utils';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [upcomingSubscriptions, setUpcomingSubscriptions] = useState([]);
+  const [budgetUsages, setBudgetUsages] = useState([]);
   const [stats, setStats] = useState({
     totalMonthly: { amount: 0, currency: 'CNY' },
     totalYearly: { amount: 0, currency: 'CNY' },
@@ -45,6 +46,10 @@ const Dashboard = () => {
       // 获取年度支出
       const yearlyRes = await statisticsAPI.getYearlySpending();
       const yearlyData = yearlyRes.data;
+      
+      // 获取预算使用情况
+      const budgetUsageRes = await budgetAPI.getAllUsage();
+      setBudgetUsages(budgetUsageRes.data);
       
       // 计算统计数据
       setStats({
@@ -89,8 +94,12 @@ const Dashboard = () => {
         const yearlyRes = await statisticsAPI.getYearlySpending();
         const yearlyData = yearlyRes.data;
         
+        // 获取预算使用情况
+        const budgetUsageRes = await budgetAPI.getAllUsage();
+        
         if (mounted) {
           setUpcomingSubscriptions(upcomingRes.data);
+          setBudgetUsages(budgetUsageRes.data);
           
           // 计算统计数据
           setStats({
@@ -184,6 +193,59 @@ const Dashboard = () => {
           footer="7天内即将到期的订阅"
         />
       </div>
+      
+      {/* 预算状态 */}
+      {budgetUsages.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-dark-600 dark:text-white">预算使用情况</h2>
+            <Link 
+              to="/budgets"
+              className="flex items-center text-sm text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              管理预算
+              <ArrowLongRightIcon className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {budgetUsages.slice(0, 3).map((usage) => (
+              <motion.div
+                key={usage.budget_id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card p-4"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-medium text-gray-900 dark:text-white">
+                    {usage.budget_name}
+                  </h3>
+                  <span className={`text-sm font-medium ${
+                    usage.exceeded ? 'text-red-600 dark:text-red-400' :
+                    usage.warning_triggered ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-green-600 dark:text-green-400'
+                  }`}>
+                    {usage.usage_percentage.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  {formatCurrency(usage.spent_amount, usage.currency)} / {formatCurrency(usage.budget_amount, usage.currency)}
+                </div>
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      usage.exceeded ? 'bg-red-500' :
+                      usage.warning_triggered ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(usage.usage_percentage, 100)}%` }}
+                  />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
       
       {/* 即将到期的订阅 */}
       <div>

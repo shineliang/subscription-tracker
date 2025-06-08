@@ -13,9 +13,11 @@ import {
   XMarkIcon,
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline';
 import { authAPI } from '../services/api';
+import BudgetAlerts from './BudgetAlerts';
 
 const Layout = ({ darkMode, setDarkMode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -28,6 +30,7 @@ const Layout = ({ darkMode, setDarkMode }) => {
     { name: '添加订阅', icon: PlusIcon, href: '/subscriptions/add' },
     { name: '付款历史', icon: CurrencyDollarIcon, href: '/payments' },
     { name: '统计分析', icon: ChartBarIcon, href: '/statistics' },
+    { name: '预算管理', icon: BanknotesIcon, href: '/budgets' },
     { name: '设置', icon: Cog6ToothIcon, href: '/settings' },
   ];
   
@@ -252,6 +255,9 @@ const Layout = ({ darkMode, setDarkMode }) => {
           </div>
         </main>
       </div>
+      
+      {/* 预算警告 */}
+      <BudgetAlerts />
     </div>
   );
 };

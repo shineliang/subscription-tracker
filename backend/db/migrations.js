@@ -76,6 +76,10 @@ class DatabaseMigration {
         {
           name: '005_add_cancelled_at_to_subscriptions',
           up: this.migration_005_add_cancelled_at_to_subscriptions.bind(this)
+        },
+        {
+          name: '006_add_budget_tables',
+          up: this.migration_006_add_budget_tables.bind(this)
         }
       ];
 
@@ -370,6 +374,104 @@ class DatabaseMigration {
             } else {
               resolve();
             }
+          });
+        });
+      });
+    });
+  }
+
+  // 迁移6: 添加预算管理相关表
+  async migration_006_add_budget_tables() {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 创建预算表
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL CHECK(type IN ('total', 'category')), -- 总预算或分类预算
+            period TEXT NOT NULL CHECK(period IN ('monthly', 'yearly')), -- 预算周期
+            amount DECIMAL(10,2) NOT NULL,
+            currency TEXT DEFAULT 'CNY',
+            category TEXT, -- 如果是分类预算，指定类别
+            warning_threshold INTEGER DEFAULT 80, -- 预警阈值（百分比）
+            is_active INTEGER DEFAULT 1,
+            start_date DATE,
+            end_date DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, type, period, category)
+          )
+        `, (err) => {
+          if (err) {
+            this.db.run('ROLLBACK');
+            return reject(err);
+          }
+          
+          // 创建预算历史表（记录预算变更）
+          this.db.run(`
+            CREATE TABLE IF NOT EXISTS budget_history (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              budget_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              period_start DATE NOT NULL,
+              period_end DATE NOT NULL,
+              budget_amount DECIMAL(10,2) NOT NULL,
+              spent_amount DECIMAL(10,2) DEFAULT 0,
+              remaining_amount DECIMAL(10,2),
+              usage_percentage DECIMAL(5,2),
+              exceeded INTEGER DEFAULT 0,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
+              FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+          `, (err2) => {
+            if (err2) {
+              this.db.run('ROLLBACK');
+              return reject(err2);
+            }
+            
+            // 创建预算警告记录表
+            this.db.run(`
+              CREATE TABLE IF NOT EXISTS budget_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                budget_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                alert_type TEXT NOT NULL CHECK(alert_type IN ('warning', 'exceeded')),
+                usage_percentage DECIMAL(5,2) NOT NULL,
+                message TEXT,
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+              )
+            `, (err3) => {
+              if (err3) {
+                this.db.run('ROLLBACK');
+                return reject(err3);
+              }
+              
+              // 创建索引
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON budgets(user_id)');
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budgets_category ON budgets(category)');
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budget_history_budget_id ON budget_history(budget_id)');
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budget_history_period ON budget_history(period_start, period_end)');
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budget_alerts_user_id ON budget_alerts(user_id)');
+              this.db.run('CREATE INDEX IF NOT EXISTS idx_budget_alerts_is_read ON budget_alerts(is_read)');
+              
+              this.db.run('COMMIT', (commitErr) => {
+                if (commitErr) {
+                  this.db.run('ROLLBACK');
+                  reject(commitErr);
+                } else {
+                  resolve();
+                }
+              });
+            });
           });
         });
       });

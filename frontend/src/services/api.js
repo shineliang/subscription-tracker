@@ -144,6 +144,39 @@ export const dataAPI = {
   },
 };
 
+// 预算管理相关API
+export const budgetAPI = {
+  // 获取所有预算
+  getAll: () => api.get('/budgets'),
+  
+  // 获取单个预算
+  getById: (id) => api.get(`/budgets/${id}`),
+  
+  // 创建新预算
+  create: (data) => api.post('/budgets', data),
+  
+  // 更新预算
+  update: (id, data) => api.put(`/budgets/${id}`, data),
+  
+  // 删除预算
+  delete: (id) => api.delete(`/budgets/${id}`),
+  
+  // 获取单个预算使用情况
+  getUsage: (id) => api.get(`/budgets/${id}/usage`),
+  
+  // 获取所有预算使用情况
+  getAllUsage: () => api.get('/budgets-usage'),
+  
+  // 检查并创建预算警告
+  checkAlerts: () => api.post('/budgets/check-alerts'),
+  
+  // 获取未读预算警告
+  getUnreadAlerts: () => api.get('/budget-alerts'),
+  
+  // 标记预算警告为已读
+  markAlertsAsRead: (alertIds) => api.put('/budget-alerts/mark-read', { alertIds }),
+};
+
 // 历史记录相关API
 export const historyAPI = {
   // 订阅历史
