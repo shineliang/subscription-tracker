@@ -2,12 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrency, formatDate, formatBillingCycle, daysUntil, getReminderStatus, getReminderStatusClass, getReminderStatusText } from '../services/utils';
 import { motion } from 'framer-motion';
-import { PencilIcon, TrashIcon, ClockIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, ClockIcon, ArrowPathIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { subscriptionAPI } from '../services/api';
 import { toast } from 'react-toastify';
 
 const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
   const [isRenewing, setIsRenewing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const {
     id,
     name,
@@ -18,7 +19,8 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
     billing_cycle,
     cycle_count,
     next_payment_date,
-    category
+    category,
+    cancelled_at
   } = subscription;
   
   const days = daysUntil(next_payment_date);
@@ -74,6 +76,14 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
               </span>
             </div>
           )}
+          
+          {cancelled_at && (
+            <div className="mt-4">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+                订阅周期结束后取消
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="border-t border-gray-200 dark:border-dark-600 p-4 bg-gray-50 dark:bg-dark-700">
@@ -93,34 +103,63 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
             
             <div className="flex space-x-2">
               {/* 续费按钮 */}
-              <button
-                onClick={async () => {
-                  if (isRenewing) return; // 防止重复点击
-                  
-                  try {
-                    setIsRenewing(true);
-                    const response = await subscriptionAPI.renew(id);
-                    toast.success('订阅已成功续费一个周期');
-                    if (onUpdate) onUpdate(response.data);
-                  } catch (error) {
-                    console.error('续费失败:', error);
-                    toast.error('续费失败，请稍后再试');
-                  } finally {
-                    setIsRenewing(false);
-                  }
-                }}
-                disabled={isRenewing}
-                className={`p-1 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 ${isRenewing ? 'cursor-not-allowed opacity-50' : ''}`}
-                title="续费一个周期"
-              >
-                <ArrowPathIcon className={`h-5 w-5 ${isRenewing ? 'animate-spin' : ''}`} />
-              </button>
+              {!cancelled_at && (
+                <button
+                  onClick={async () => {
+                    if (isRenewing) return; // 防止重复点击
+                    
+                    try {
+                      setIsRenewing(true);
+                      const response = await subscriptionAPI.renew(id);
+                      toast.success(response.data.message || '订阅已成功续费一个周期');
+                      if (onUpdate) onUpdate(response.data);
+                    } catch (error) {
+                      console.error('续费失败:', error);
+                      toast.error('续费失败，请稍后再试');
+                    } finally {
+                      setIsRenewing(false);
+                    }
+                  }}
+                  disabled={isRenewing}
+                  className={`p-1 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 ${isRenewing ? 'cursor-not-allowed opacity-50' : ''}`}
+                  title="续费一个周期（保持日期连续）"
+                >
+                  <ArrowPathIcon className={`h-5 w-5 ${isRenewing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
               <Link 
                 to={`/subscriptions/edit/${id}`}
                 className="p-1 text-gray-500 hover:text-primary-500 dark:text-gray-400 dark:hover:text-primary-400"
               >
                 <PencilIcon className="h-5 w-5" />
               </Link>
+              {/* 取消订阅按钮 */}
+              {!cancelled_at && (
+                <button
+                  onClick={async () => {
+                    if (isCancelling) return; // 防止重复点击
+                    
+                    if (window.confirm('确定要取消此订阅吗？当前订阅周期结束后将不再续费。')) {
+                      try {
+                        setIsCancelling(true);
+                        const response = await subscriptionAPI.cancel(id);
+                        toast.success('订阅已设置为周期结束后取消');
+                        if (onUpdate) onUpdate(response.data);
+                      } catch (error) {
+                        console.error('取消订阅失败:', error);
+                        toast.error('取消订阅失败，请稍后再试');
+                      } finally {
+                        setIsCancelling(false);
+                      }
+                    }
+                  }}
+                  disabled={isCancelling}
+                  className={`p-1 text-gray-500 hover:text-orange-500 dark:text-gray-400 dark:hover:text-orange-400 ${isCancelling ? 'cursor-not-allowed opacity-50' : ''}`}
+                  title="取消订阅"
+                >
+                  <XCircleIcon className={`h-5 w-5 ${isCancelling ? 'animate-pulse' : ''}`} />
+                </button>
+              )}
               <button 
                 onClick={() => onDelete(id)}
                 className="p-1 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400"

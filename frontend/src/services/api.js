@@ -92,6 +92,9 @@ export const subscriptionAPI = {
   
   // 续费订阅（延长下次付款日期一个周期）
   renew: (id) => api.post(`/subscriptions/${id}/renew`),
+  
+  // 取消订阅（订阅周期结束后不再续费）
+  cancel: (id) => api.post(`/subscriptions/${id}/cancel`),
 };
 
 // 统计相关API

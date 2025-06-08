@@ -72,6 +72,10 @@ class DatabaseMigration {
         {
           name: '004_add_subscription_history_tables',
           up: this.migration_004_add_subscription_history_tables.bind(this)
+        },
+        {
+          name: '005_add_cancelled_at_to_subscriptions',
+          up: this.migration_005_add_cancelled_at_to_subscriptions.bind(this)
         }
       ];
 
@@ -334,6 +338,38 @@ class DatabaseMigration {
                 }
               });
             });
+          });
+        });
+      });
+    });
+  }
+
+  // 迁移5: 为订阅表添加cancelled_at字段
+  async migration_005_add_cancelled_at_to_subscriptions() {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 添加cancelled_at列
+        this.db.run(`
+          ALTER TABLE subscriptions 
+          ADD COLUMN cancelled_at TIMESTAMP DEFAULT NULL
+        `, (err) => {
+          if (err) {
+            // 如果列已存在，忽略错误
+            if (!err.message.includes('duplicate column name')) {
+              this.db.run('ROLLBACK');
+              return reject(err);
+            }
+          }
+          
+          this.db.run('COMMIT', (commitErr) => {
+            if (commitErr) {
+              this.db.run('ROLLBACK');
+              reject(commitErr);
+            } else {
+              resolve();
+            }
           });
         });
       });

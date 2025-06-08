@@ -80,15 +80,16 @@ class Subscription {
       next_payment_date,
       reminder_days,
       category,
-      active
+      active,
+      cancelled_at
     } = subscription;
 
     const query = `
       INSERT INTO subscriptions (
         user_id, name, description, provider, amount, currency, 
         billing_cycle, cycle_count, start_date, next_payment_date, 
-        reminder_days, category, active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        reminder_days, category, active, cancelled_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.run(
@@ -106,7 +107,8 @@ class Subscription {
         next_payment_date, 
         reminder_days || 7, 
         category, 
-        active || 1
+        active || 1,
+        cancelled_at || null
       ], 
       function(err) {
         if (err) {
@@ -152,7 +154,8 @@ class Subscription {
         next_payment_date,
         reminder_days,
         category,
-        active
+        active,
+        cancelled_at
       } = subscription;
 
       const query = `
@@ -160,7 +163,7 @@ class Subscription {
         SET name = ?, description = ?, provider = ?, amount = ?, 
             currency = ?, billing_cycle = ?, cycle_count = ?, 
             start_date = ?, next_payment_date = ?, reminder_days = ?, 
-            category = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+            category = ?, active = ?, cancelled_at = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?
       `;
       
@@ -179,6 +182,7 @@ class Subscription {
           reminder_days || 7, 
           category, 
           active !== undefined ? active : 1,
+          cancelled_at !== undefined ? cancelled_at : null,
           id,
           userId
         ], 
@@ -241,7 +245,8 @@ class Subscription {
       next_payment_date,
       reminder_days,
       category,
-      active
+      active,
+      cancelled_at
     } = subscription;
 
     const query = `
@@ -258,6 +263,7 @@ class Subscription {
           reminder_days = ?,
           category = ?,
           active = ?,
+          cancelled_at = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
@@ -277,6 +283,7 @@ class Subscription {
         reminder_days, 
         category, 
         active,
+        cancelled_at !== undefined ? cancelled_at : null,
         id
       ], 
       function(err) {
@@ -346,6 +353,7 @@ class Subscription {
       WHERE user_id = ?
       AND next_payment_date BETWEEN ? AND ?
       AND active = 1
+      AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
     `;
     
@@ -366,6 +374,7 @@ class Subscription {
       SELECT * FROM subscriptions 
       WHERE next_payment_date BETWEEN ? AND ?
       AND active = 1
+      AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
     `;
     

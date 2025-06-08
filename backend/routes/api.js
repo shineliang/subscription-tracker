@@ -234,6 +234,58 @@ router.delete('/subscriptions/:id', authenticateToken, validateId, (req, res) =>
   });
 });
 
+// 取消订阅（当前周期结束后不再续费）
+router.post('/subscriptions/:id/cancel', authenticateToken, validateId, (req, res) => {
+  const subscriptionId = req.params.id;
+  
+  // 获取订阅信息
+  Subscription.getByIdAndUser(subscriptionId, req.user.id, (err, subscription) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    if (!subscription) {
+      return res.status(404).json({ error: '订阅不存在' });
+    }
+    
+    if (subscription.cancelled_at) {
+      return res.status(400).json({ error: '该订阅已经被取消' });
+    }
+    
+    // 更新订阅的cancelled_at字段
+    const updatedSubscription = {
+      ...subscription,
+      cancelled_at: new Date().toISOString()
+    };
+    
+    Subscription.updateByUser(subscriptionId, req.user.id, updatedSubscription, (updateErr, result) => {
+      if (updateErr) {
+        return res.status(500).json({ error: updateErr.message });
+      }
+      
+      // 记录取消历史
+      const SubscriptionHistory = require('../models/subscriptionHistory');
+      SubscriptionHistory.recordChange(
+        subscriptionId,
+        req.user.id,
+        'cancelled',
+        null,
+        '用户取消订阅，当前周期结束后不再续费',
+        (histErr) => {
+          if (histErr) {
+            console.error('记录订阅历史失败:', histErr);
+          }
+        }
+      );
+      
+      res.json({
+        ...result,
+        message: '订阅已设置为当前周期结束后取消'
+      });
+    });
+  });
+});
+
 // 续费订阅（延长下次付款日期一个周期）
 router.post('/subscriptions/:id/renew', authenticateToken, validateId, (req, res) => {
   const subscriptionId = req.params.id;
@@ -248,36 +300,53 @@ router.post('/subscriptions/:id/renew', authenticateToken, validateId, (req, res
       return res.status(404).json({ error: '订阅不存在' });
     }
     
+    if (subscription.cancelled_at) {
+      // 如果订阅已取消，续费时清除取消状态
+      subscription.cancelled_at = null;
+    }
+    
     // 根据订阅周期计算新的下次付款日期
-    const currentPaymentDate = moment(subscription.next_payment_date);
+    // 始终基于当前的 next_payment_date 来计算，确保连续性
+    const basePaymentDate = moment(subscription.next_payment_date);
+    const today = moment();
     let cycleCount = subscription.cycle_count || 1;
     let newPaymentDate;
     
+    // 计算下一个付款日期
     switch (subscription.billing_cycle) {
       case 'monthly':
-        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'months').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(cycleCount, 'months');
         break;
       case 'yearly':
-        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'years').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(cycleCount, 'years');
         break;
       case 'half_yearly':
-        newPaymentDate = currentPaymentDate.clone().add(6 * cycleCount, 'months').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(6 * cycleCount, 'months');
         break;
       case 'quarterly':
-        newPaymentDate = currentPaymentDate.clone().add(3 * cycleCount, 'months').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(3 * cycleCount, 'months');
         break;
       case 'weekly':
-        newPaymentDate = currentPaymentDate.clone().add(7 * cycleCount, 'days').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(7 * cycleCount, 'days');
         break;
       case 'daily':
-        newPaymentDate = currentPaymentDate.clone().add(cycleCount, 'days').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(cycleCount, 'days');
         break;
       default:
-        newPaymentDate = currentPaymentDate.clone().add(1, 'months').format('YYYY-MM-DD');
+        newPaymentDate = basePaymentDate.clone().add(1, 'months');
     }
     
+    // 如果订阅已经过期很久，可能需要多次续费才能到未来日期
+    // 但保持连续性，每次只续费一个周期
+    const renewalInfo = {
+      previousPaymentDate: subscription.next_payment_date,
+      newPaymentDate: newPaymentDate.format('YYYY-MM-DD'),
+      isOverdue: basePaymentDate.isBefore(today),
+      daysPastDue: today.diff(basePaymentDate, 'days')
+    };
+    
     // 更新订阅的下次付款日期
-    subscription.next_payment_date = newPaymentDate;
+    subscription.next_payment_date = renewalInfo.newPaymentDate;
     
     Subscription.updateByUser(subscriptionId, req.user.id, subscription, (updateErr, updatedSubscription) => {
       if (updateErr) {
@@ -303,18 +372,27 @@ router.post('/subscriptions/:id/renew', authenticateToken, validateId, (req, res
         user_id: req.user.id,
         amount: subscription.amount,
         currency: subscription.currency,
-        payment_date: currentPaymentDate.format('YYYY-MM-DD'),
+        payment_date: renewalInfo.previousPaymentDate,
         payment_method: req.body.payment_method || null,
-        notes: req.body.notes || '手动续费'
+        notes: req.body.notes || (renewalInfo.isOverdue ? 
+          `手动续费（已过期${renewalInfo.daysPastDue}天）` : 
+          '手动续费')
       }, (paymentErr) => {
         if (paymentErr) {
           console.error('记录付款历史失败:', paymentErr);
         }
       });
       
+      // 构建响应信息
+      let message = '订阅已成功续费一个周期';
+      if (renewalInfo.isOverdue) {
+        message += `（订阅已过期${renewalInfo.daysPastDue}天，已按连续周期续费）`;
+      }
+      
       res.json({
         ...updatedSubscription,
-        message: '订阅已成功续费一个周期'
+        message: message,
+        renewalInfo: renewalInfo
       });
     });
   });
