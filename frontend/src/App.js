@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 // 布局组件
 import Layout from './components/Layout';
 import Login from './components/Login';
+import Register from './components/Register';
 
 // 页面组件
 import Dashboard from './pages/Dashboard';
@@ -63,6 +64,7 @@ function App() {
       />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/"
           element={

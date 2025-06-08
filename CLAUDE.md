@@ -22,6 +22,8 @@ npm run build  # Production build
 ### Database Setup
 ```bash
 # Backend automatically creates SQLite database on first run
+# Database migrations run automatically on server startup
+# Default admin account: username: admin, password: admin123
 # To seed with sample data:
 cd backend && node seedDB.js
 ```
@@ -31,7 +33,9 @@ cd backend && node seedDB.js
 This is a full-stack subscription tracking application with:
 
 - **Backend**: Node.js/Express API server on port 5200
-  - SQLite database with subscriptions, reminders, and notification_settings tables
+  - SQLite database with users, subscriptions, reminders, and notification_settings tables
+  - JWT authentication with Bearer token support
+  - Multi-user support with data isolation
   - Daily cron job for checking upcoming renewals
   - Email notifications via nodemailer
   - CSV import/export functionality
@@ -46,6 +50,8 @@ This is a full-stack subscription tracking application with:
 
 All API endpoints are prefixed with `/api`:
 
+- **Authentication**: `/api/auth/*` for login, register, token refresh
+  - All other endpoints require `Authorization: Bearer <token>` header
 - **CRUD Operations**: Standard REST patterns for `/api/subscriptions`
 - **Statistics**: Aggregated data endpoints under `/api/statistics/*`
 - **File Operations**: Import/export via `/api/import-data` and `/api/export-data`
@@ -54,10 +60,13 @@ All API endpoints are prefixed with `/api`:
 ## Important Implementation Details
 
 1. **State Management**: React hooks (useState, useEffect) - no Redux/Context API
-2. **Authentication**: Basic localStorage implementation (prototype-level)
+2. **Authentication**: JWT-based auth with localStorage/sessionStorage for tokens
+   - Axios interceptors handle token injection and 401 redirects
+   - Protected routes using ProtectedRoute component
 3. **Date Handling**: Uses moment.js throughout for consistency
 4. **Error Handling**: Centralized error middleware returns consistent JSON errors
 5. **File Uploads**: Handled by multer middleware for CSV imports
+6. **Database Migrations**: Automatic migration system in db/migrations.js
 
 ## Testing and Linting
 

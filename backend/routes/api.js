@@ -44,6 +44,7 @@ const upload = multer({
 const fs = require('fs');
 const { parse } = require('csv-parse');
 const { validateSubscription, validateId, validateNotificationSettings } = require('../middleware/validation');
+const { authenticateToken } = require('../middleware/auth');
 
 // 计算下一个付款日期并完善订阅信息
 function extract_subscription_info(subscriptionInfo) {
@@ -148,8 +149,8 @@ function createMessages(description) {
 }
 
 // 获取所有订阅
-router.get('/subscriptions', (req, res) => {
-  Subscription.getAll((err, subscriptions) => {
+router.get('/subscriptions', authenticateToken, (req, res) => {
+  Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -158,8 +159,8 @@ router.get('/subscriptions', (req, res) => {
 });
 
 // 获取单个订阅
-router.get('/subscriptions/:id', validateId, (req, res) => {
-  Subscription.getById(req.params.id, (err, subscription) => {
+router.get('/subscriptions/:id', authenticateToken, validateId, (req, res) => {
+  Subscription.getByIdAndUser(req.params.id, req.user.id, (err, subscription) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -171,8 +172,10 @@ router.get('/subscriptions/:id', validateId, (req, res) => {
 });
 
 // 创建新订阅
-router.post('/subscriptions', validateSubscription, (req, res) => {
-  const subscription = req.body;
+router.post('/subscriptions', authenticateToken, validateSubscription, (req, res) => {
+  // 使用extract_subscription_info来计算next_payment_date
+  const processedData = extract_subscription_info(req.body);
+  const subscription = { ...processedData, user_id: req.user.id };
 
   Subscription.create(subscription, (err, newSubscription) => {
     if (err) {
@@ -196,10 +199,11 @@ router.post('/subscriptions', validateSubscription, (req, res) => {
 });
 
 // 更新订阅
-router.put('/subscriptions/:id', validateId, validateSubscription, (req, res) => {
-  const subscription = req.body;
+router.put('/subscriptions/:id', authenticateToken, validateId, validateSubscription, (req, res) => {
+  // 使用extract_subscription_info来计算next_payment_date
+  const subscription = extract_subscription_info(req.body);
   
-  Subscription.update(req.params.id, subscription, (err, updatedSubscription) => {
+  Subscription.updateByUser(req.params.id, req.user.id, subscription, (err, updatedSubscription) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -221,8 +225,8 @@ router.put('/subscriptions/:id', validateId, validateSubscription, (req, res) =>
 });
 
 // 删除订阅
-router.delete('/subscriptions/:id', validateId, (req, res) => {
-  Subscription.delete(req.params.id, (err, result) => {
+router.delete('/subscriptions/:id', authenticateToken, validateId, (req, res) => {
+  Subscription.deleteByUser(req.params.id, req.user.id, (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -231,11 +235,11 @@ router.delete('/subscriptions/:id', validateId, (req, res) => {
 });
 
 // 续费订阅（延长下次付款日期一个周期）
-router.post('/subscriptions/:id/renew', validateId, (req, res) => {
+router.post('/subscriptions/:id/renew', authenticateToken, validateId, (req, res) => {
   const subscriptionId = req.params.id;
   
   // 获取订阅信息
-  Subscription.getById(subscriptionId, (err, subscription) => {
+  Subscription.getByIdAndUser(subscriptionId, req.user.id, (err, subscription) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -275,7 +279,7 @@ router.post('/subscriptions/:id/renew', validateId, (req, res) => {
     // 更新订阅的下次付款日期
     subscription.next_payment_date = newPaymentDate;
     
-    Subscription.update(subscriptionId, subscription, (updateErr, updatedSubscription) => {
+    Subscription.updateByUser(subscriptionId, req.user.id, subscription, (updateErr, updatedSubscription) => {
       if (updateErr) {
         return res.status(500).json({ error: updateErr.message });
       }
@@ -301,10 +305,10 @@ router.post('/subscriptions/:id/renew', validateId, (req, res) => {
 });
 
 // 获取即将到期的订阅
-router.get('/subscriptions/upcoming/:days', (req, res) => {
+router.get('/subscriptions/upcoming/:days', authenticateToken, (req, res) => {
   const days = parseInt(req.params.days) || 7;
   
-  Subscription.getUpcoming(days, (err, subscriptions) => {
+  Subscription.getUpcomingByUser(req.user.id, days, (err, subscriptions) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -313,8 +317,8 @@ router.get('/subscriptions/upcoming/:days', (req, res) => {
 });
 
 // 获取每月花费
-router.get('/statistics/monthly', (req, res) => {
-  Subscription.getMonthlySpending((err, stats) => {
+router.get('/statistics/monthly', authenticateToken, (req, res) => {
+  Subscription.getMonthlySpendingByUser(req.user.id, (err, stats) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -323,8 +327,8 @@ router.get('/statistics/monthly', (req, res) => {
 });
 
 // 获取每年花费
-router.get('/statistics/yearly', (req, res) => {
-  Subscription.getYearlySpending((err, stats) => {
+router.get('/statistics/yearly', authenticateToken, (req, res) => {
+  Subscription.getYearlySpendingByUser(req.user.id, (err, stats) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -333,9 +337,9 @@ router.get('/statistics/yearly', (req, res) => {
 });
 
 // 按类别获取花费
-router.get('/statistics/by-category', (req, res) => {
+router.get('/statistics/by-category', authenticateToken, (req, res) => {
   const timeframe = req.query.timeframe || 'monthly';
-  Subscription.getSpendingByCategory(timeframe, (err, stats) => {
+  Subscription.getSpendingByCategoryByUser(req.user.id, timeframe, (err, stats) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -344,8 +348,8 @@ router.get('/statistics/by-category', (req, res) => {
 });
 
 // 获取月度趋势数据
-router.get('/statistics/monthly-trend', (req, res) => {
-  Subscription.getMonthlyTrend((err, stats) => {
+router.get('/statistics/monthly-trend', authenticateToken, (req, res) => {
+  Subscription.getMonthlyTrendByUser(req.user.id, (err, stats) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -354,8 +358,8 @@ router.get('/statistics/monthly-trend', (req, res) => {
 });
 
 // 获取通知设置
-router.get('/notification-settings', (req, res) => {
-  NotificationSetting.get((err, settings) => {
+router.get('/notification-settings', authenticateToken, (req, res) => {
+  NotificationSetting.getByUser(req.user.id, (err, settings) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -364,10 +368,10 @@ router.get('/notification-settings', (req, res) => {
 });
 
 // 更新通知设置
-router.put('/notification-settings', validateNotificationSettings, (req, res) => {
+router.put('/notification-settings', authenticateToken, validateNotificationSettings, (req, res) => {
   const settings = req.body;
   
-  NotificationSetting.update(settings, (err, updatedSettings) => {
+  NotificationSetting.updateByUser(req.user.id, settings, (err, updatedSettings) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -376,7 +380,7 @@ router.put('/notification-settings', validateNotificationSettings, (req, res) =>
 });
 
 // LLM API整合 - 解析订阅信息
-router.post('/parse-subscription', async (req, res) => {
+router.post('/parse-subscription', authenticateToken, async (req, res) => {
   try {
     const { description } = req.body;
     
@@ -463,10 +467,10 @@ router.post('/parse-subscription', async (req, res) => {
 });
 
 // 导出所有订阅数据
-router.get('/export-data', async (req, res) => {
+router.get('/export-data', authenticateToken, async (req, res) => {
   try {
-    // 获取所有订阅数据
-    Subscription.getAll((err, subscriptions) => {
+    // 获取用户的所有订阅数据
+    Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
       if (err) {
         return res.status(500).json({ error: err.message });
       }
@@ -508,7 +512,7 @@ router.get('/export-data', async (req, res) => {
 });
 
 // 导入订阅数据
-router.post('/import-data', upload.single('file'), async (req, res) => {
+router.post('/import-data', authenticateToken, upload.single('file'), async (req, res) => {
   const filePath = req.file ? req.file.path : null;
   
   // 文件清理函数
@@ -581,6 +585,8 @@ router.post('/import-data', upload.single('file'), async (req, res) => {
         const importPromises = records.map((subscription, index) => {
           return new Promise((resolve) => {
             const processedSubscription = extract_subscription_info(subscription);
+            // 添加当前用户ID
+            processedSubscription.user_id = req.user.id;
             Subscription.create(processedSubscription, (err) => {
               if (err) {
                 console.error(`导入第${index + 1}行失败:`, err);

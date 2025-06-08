@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const moment = require('moment'); // 添加 moment 库的导入
 const apiRoutes = require('./routes/api');
+const authRoutes = require('./routes/auth');
 const Reminder = require('./models/reminder');
 const NotificationSetting = require('./models/notificationSetting');
 const Subscription = require('./models/subscription');
@@ -22,6 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 // API路由
+app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes);
 
 // 处理生产环境下的静态资源

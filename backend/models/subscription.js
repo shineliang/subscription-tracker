@@ -2,7 +2,23 @@ const db = require('../db/database');
 const moment = require('moment');
 
 class Subscription {
-  // 获取所有订阅
+  // 获取用户的所有订阅
+  static getAllByUser(userId, callback) {
+    const query = `
+      SELECT * FROM subscriptions 
+      WHERE user_id = ?
+      ORDER BY next_payment_date ASC
+    `;
+    
+    db.all(query, [userId], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      callback(null, rows);
+    });
+  }
+  
+  // 获取所有订阅（管理员用）
   static getAll(callback) {
     const query = `
       SELECT * FROM subscriptions 
@@ -17,7 +33,22 @@ class Subscription {
     });
   }
 
-  // 获取单个订阅
+  // 获取单个订阅（验证用户权限）
+  static getByIdAndUser(id, userId, callback) {
+    const query = `
+      SELECT * FROM subscriptions 
+      WHERE id = ? AND user_id = ?
+    `;
+    
+    db.get(query, [id, userId], (err, row) => {
+      if (err) {
+        return callback(err, null);
+      }
+      callback(null, row);
+    });
+  }
+  
+  // 获取单个订阅（不验证用户）
   static getById(id, callback) {
     const query = `
       SELECT * FROM subscriptions 
@@ -35,6 +66,7 @@ class Subscription {
   // 创建新订阅
   static create(subscription, callback) {
     const {
+      user_id,
       name,
       description,
       provider,
@@ -51,15 +83,16 @@ class Subscription {
 
     const query = `
       INSERT INTO subscriptions (
-        name, description, provider, amount, currency, 
+        user_id, name, description, provider, amount, currency, 
         billing_cycle, cycle_count, start_date, next_payment_date, 
         reminder_days, category, active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.run(
       query, 
       [
+        user_id,
         name, 
         description, 
         provider,
@@ -82,7 +115,63 @@ class Subscription {
     );
   }
 
-  // 更新订阅
+  // 更新订阅（验证用户权限）
+  static updateByUser(id, userId, subscription, callback) {
+    const {
+      name,
+      description,
+      provider,
+      amount,
+      currency,
+      billing_cycle,
+      cycle_count,
+      start_date,
+      next_payment_date,
+      reminder_days,
+      category,
+      active
+    } = subscription;
+
+    const query = `
+      UPDATE subscriptions 
+      SET name = ?, description = ?, provider = ?, amount = ?, 
+          currency = ?, billing_cycle = ?, cycle_count = ?, 
+          start_date = ?, next_payment_date = ?, reminder_days = ?, 
+          category = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `;
+    
+    db.run(
+      query, 
+      [
+        name, 
+        description, 
+        provider, 
+        amount, 
+        currency, 
+        billing_cycle, 
+        cycle_count || 1, 
+        start_date, 
+        next_payment_date, 
+        reminder_days || 7, 
+        category, 
+        active || 1,
+        id,
+        userId
+      ], 
+      function(err) {
+        if (err) {
+          return callback(err, null);
+        }
+        if (this.changes === 0) {
+          return callback(new Error('订阅不存在或无权限'), null);
+        }
+        callback(null, { id, ...subscription });
+      }
+    );
+  }
+  
+  // 更新订阅（不验证用户）
   static update(id, subscription, callback) {
     const {
       name,
@@ -143,7 +232,22 @@ class Subscription {
     );
   }
 
-  // 删除订阅
+  // 删除订阅（验证用户权限）
+  static deleteByUser(id, userId, callback) {
+    const query = `DELETE FROM subscriptions WHERE id = ? AND user_id = ?`;
+    
+    db.run(query, [id, userId], function(err) {
+      if (err) {
+        return callback(err, null);
+      }
+      if (this.changes === 0) {
+        return callback(new Error('订阅不存在或无权限'), null);
+      }
+      callback(null, { id, deleted: true });
+    });
+  }
+  
+  // 删除订阅（不验证用户）
   static delete(id, callback) {
     const query = `DELETE FROM subscriptions WHERE id = ?`;
     
@@ -155,7 +259,28 @@ class Subscription {
     });
   }
 
-  // 获取即将到期的订阅
+  // 获取用户即将到期的订阅
+  static getUpcomingByUser(userId, days = 7, callback) {
+    const today = moment().format('YYYY-MM-DD');
+    const futureDate = moment().add(days, 'days').format('YYYY-MM-DD');
+    
+    const query = `
+      SELECT * FROM subscriptions 
+      WHERE user_id = ?
+      AND next_payment_date BETWEEN ? AND ?
+      AND active = 1
+      ORDER BY next_payment_date ASC
+    `;
+    
+    db.all(query, [userId, today, futureDate], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      callback(null, rows);
+    });
+  }
+  
+  // 获取即将到期的订阅（所有用户）
   static getUpcoming(days = 7, callback) {
     const today = moment().format('YYYY-MM-DD');
     const futureDate = moment().add(days, 'days').format('YYYY-MM-DD');
@@ -415,6 +540,221 @@ class Subscription {
       results.sort((a, b) => {
         return moment(b.month).diff(moment(a.month));
       });
+      
+      callback(null, results);
+    });
+  }
+
+  // 计算用户的每月花费
+  static getMonthlySpendingByUser(userId, callback) {
+    const query = `
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount
+          WHEN billing_cycle = 'yearly' THEN amount / 12
+          WHEN billing_cycle = 'half_yearly' THEN amount / 6
+          WHEN billing_cycle = 'quarterly' THEN amount / 3
+          WHEN billing_cycle = 'weekly' THEN amount * 4.33
+          WHEN billing_cycle = 'daily' THEN amount * 30.44
+          ELSE amount
+        END as monthly_amount,
+        currency,
+        billing_cycle
+      FROM subscriptions
+      WHERE active = 1 AND user_id = ?
+    `;
+    
+    db.all(query, [userId], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      
+      // 按货币分组计算总额
+      const totals = {};
+      rows.forEach(row => {
+        if (!totals[row.currency]) {
+          totals[row.currency] = 0;
+        }
+        totals[row.currency] += row.monthly_amount;
+      });
+      
+      callback(null, { 
+        details: rows,
+        totals: totals
+      });
+    });
+  }
+
+  // 计算用户的每年花费
+  static getYearlySpendingByUser(userId, callback) {
+    const query = `
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount * 12
+          WHEN billing_cycle = 'yearly' THEN amount
+          WHEN billing_cycle = 'half_yearly' THEN amount * 2
+          WHEN billing_cycle = 'quarterly' THEN amount * 4
+          WHEN billing_cycle = 'weekly' THEN amount * 52
+          WHEN billing_cycle = 'daily' THEN amount * 365
+          ELSE amount
+        END as yearly_amount,
+        currency,
+        billing_cycle
+      FROM subscriptions
+      WHERE active = 1 AND user_id = ?
+    `;
+    
+    db.all(query, [userId], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      
+      // 按货币分组计算总额
+      const totals = {};
+      rows.forEach(row => {
+        if (!totals[row.currency]) {
+          totals[row.currency] = 0;
+        }
+        totals[row.currency] += row.yearly_amount;
+      });
+      
+      callback(null, { 
+        details: rows,
+        totals: totals
+      });
+    });
+  }
+
+  // 按类别分组统计用户的支出
+  static getSpendingByCategoryByUser(userId, timeframe = 'monthly', callback) {
+    // 根据时间范围选择合适的计算方法
+    const amountExpression = timeframe === 'monthly' ? 
+      `CASE
+        WHEN billing_cycle = 'monthly' THEN amount
+        WHEN billing_cycle = 'yearly' THEN amount / 12
+        WHEN billing_cycle = 'half_yearly' THEN amount / 6
+        WHEN billing_cycle = 'quarterly' THEN amount / 3
+        WHEN billing_cycle = 'weekly' THEN amount * 4.33
+        WHEN billing_cycle = 'daily' THEN amount * 30.44
+        ELSE amount
+      END` : 
+      `CASE
+        WHEN billing_cycle = 'monthly' THEN amount * 12
+        WHEN billing_cycle = 'yearly' THEN amount
+        WHEN billing_cycle = 'half_yearly' THEN amount * 2
+        WHEN billing_cycle = 'quarterly' THEN amount * 4
+        WHEN billing_cycle = 'weekly' THEN amount * 52
+        WHEN billing_cycle = 'daily' THEN amount * 365
+        ELSE amount
+      END`;
+    
+    const query = `
+      SELECT 
+        category,
+        COUNT(*) as subscription_count,
+        SUM(${amountExpression}) as total_amount,
+        currency
+      FROM subscriptions
+      WHERE active = 1 AND user_id = ?
+      GROUP BY category, currency
+    `;
+    
+    db.all(query, [userId], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      callback(null, rows);
+    });
+  }
+
+  // 获取用户的月度趋势数据
+  static getMonthlyTrendByUser(userId, callback) {
+    const months = 12; // 获取过去12个月的数据
+    const results = [];
+    
+    // 生成过去12个月的月份列表
+    for (let i = 0; i < months; i++) {
+      const monthDate = moment().subtract(i, 'months');
+      const monthName = monthDate.format('YYYY-MM');
+      const monthStart = monthDate.startOf('month').format('YYYY-MM-DD');
+      const monthEnd = monthDate.endOf('month').format('YYYY-MM-DD');
+      
+      results.push({
+        month: monthName,
+        label: monthDate.format('YYYY年M月'),
+        monthStart: monthStart,
+        monthEnd: monthEnd
+      });
+    }
+    
+    // 查询用户的所有活跃订阅
+    const query = `
+      SELECT 
+        id,
+        name,
+        amount,
+        currency,
+        billing_cycle,
+        start_date,
+        next_payment_date
+      FROM subscriptions
+      WHERE active = 1 AND user_id = ?
+    `;
+    
+    db.all(query, [userId], (err, subscriptions) => {
+      if (err) {
+        return callback(err, null);
+      }
+      
+      // 计算每个订阅在每个月的支出
+      results.forEach(month => {
+        const monthlyCosts = {};
+        
+        subscriptions.forEach(sub => {
+          // 检查订阅在当前月是否应该计算（开始日期早于或等于月末）
+          const startDate = moment(sub.start_date);
+          const monthEnd = moment(month.monthEnd);
+          
+          if (startDate.isSameOrBefore(monthEnd)) {
+            // 根据计费周期计算该月应该的支出
+            let monthlyAmount = 0;
+            
+            switch (sub.billing_cycle) {
+              case 'monthly':
+                monthlyAmount = sub.amount;
+                break;
+              case 'yearly':
+                monthlyAmount = sub.amount / 12;
+                break;
+              case 'half_yearly':
+                monthlyAmount = sub.amount / 6;
+                break;
+              case 'quarterly':
+                monthlyAmount = sub.amount / 3;
+                break;
+              case 'weekly':
+                monthlyAmount = sub.amount * 4.33;
+                break;
+              case 'daily':
+                monthlyAmount = sub.amount * 30.44;
+                break;
+            }
+            
+            if (!monthlyCosts[sub.currency]) {
+              monthlyCosts[sub.currency] = 0;
+            }
+            monthlyCosts[sub.currency] += monthlyAmount;
+          }
+        });
+        
+        month.amount = monthlyCosts;
+        month.subscriptionCounts = subscriptions.filter(sub => 
+          moment(sub.start_date).isSameOrBefore(month.monthEnd)
+        ).length;
+      });
+      
+      // 反转数组，使最早的月份在前
+      results.reverse();
       
       callback(null, results);
     });

@@ -1,6 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const DatabaseMigration = require('./migrations');
 
 class Database {
   constructor() {
@@ -24,7 +25,14 @@ class Database {
           reject(err);
         } else {
           console.log('数据库连接成功');
-          this.initDb().then(resolve).catch(reject);
+          this.initDb()
+            .then(() => {
+              // 运行数据库迁移
+              const migration = new DatabaseMigration(this.db);
+              return migration.runMigrations();
+            })
+            .then(resolve)
+            .catch(reject);
         }
       });
     });

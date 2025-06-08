@@ -11,8 +11,10 @@ import {
   MoonIcon,
   Bars3Icon,
   XMarkIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  UserCircleIcon
 } from '@heroicons/react/24/outline';
+import { authAPI } from '../services/api';
 
 const Layout = ({ darkMode, setDarkMode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -30,10 +32,38 @@ const Layout = ({ darkMode, setDarkMode }) => {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleDarkMode = () => setDarkMode(!darkMode);
   
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // 调用登出API
+      await authAPI.logout();
+    } catch (error) {
+      console.error('登出失败:', error);
+    }
+    
+    // 清除本地存储
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     localStorage.removeItem('isAuthenticated');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    
     navigate('/login');
   };
+  
+  // 获取用户信息
+  const getUserInfo = () => {
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (userStr) {
+      try {
+        return JSON.parse(userStr);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+  
+  const user = getUserInfo();
   
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-dark-800 transition-colors duration-300">
@@ -81,6 +111,28 @@ const Layout = ({ darkMode, setDarkMode }) => {
               </Link>
             ))}
           </nav>
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t dark:border-dark-600">
+            {user && (
+              <div className="flex items-center space-x-3 mb-3">
+                <UserCircleIcon className="h-10 w-10 text-gray-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user.full_name || user.username}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center w-full px-3 py-2 text-sm font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3" />
+              退出登录
+            </button>
+          </div>
         </div>
       </div>
 
@@ -116,6 +168,19 @@ const Layout = ({ darkMode, setDarkMode }) => {
             ))}
           </nav>
           <div className="p-4 border-t dark:border-dark-600">
+            {user && (
+              <div className="flex items-center space-x-3 mb-4">
+                <UserCircleIcon className="h-10 w-10 text-gray-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {user.full_name || user.username}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+            )}
             <button
               onClick={toggleDarkMode}
               className="flex items-center w-full px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-600 mb-2"
@@ -156,7 +221,15 @@ const Layout = ({ darkMode, setDarkMode }) => {
             </button>
             <span className="ml-2 text-lg font-semibold text-dark-500 dark:text-white">订阅管家</span>
           </div>
-          <div className="flex items-center lg:hidden ml-auto">
+          <div className="flex items-center lg:hidden ml-auto space-x-2">
+            {user && (
+              <div className="flex items-center space-x-2 mr-2">
+                <UserCircleIcon className="h-6 w-6 text-gray-400" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 max-w-[100px] truncate">
+                  {user.username}
+                </span>
+              </div>
+            )}
             <button
               onClick={toggleDarkMode}
               className="p-1 rounded-md text-gray-500 hover:text-gray-600 dark:text-gray-400 dark:hover:text-white focus:outline-none"

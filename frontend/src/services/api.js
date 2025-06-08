@@ -2,12 +2,73 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
+// 创建axios实例
 const api = axios.create({
   baseURL: `${API_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// 请求拦截器 - 添加认证token
+api.interceptors.request.use(
+  (config) => {
+    // 从localStorage或sessionStorage获取token
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// 响应拦截器 - 处理认证错误
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // token过期或无效，清除本地存储并跳转到登录页
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('isAuthenticated');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+      
+      // 如果不是在登录或注册页面，则跳转到登录页
+      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/register')) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// 认证相关API
+export const authAPI = {
+  // 用户注册
+  register: (data) => api.post('/auth/register', data),
+  
+  // 用户登录
+  login: (data) => api.post('/auth/login', data),
+  
+  // 刷新token
+  refreshToken: () => api.post('/auth/refresh'),
+  
+  // 获取当前用户信息
+  getCurrentUser: () => api.get('/auth/me'),
+  
+  // 更新用户信息
+  updateProfile: (data) => api.put('/auth/me', data),
+  
+  // 修改密码
+  changePassword: (data) => api.put('/auth/change-password', data),
+  
+  // 登出
+  logout: () => api.post('/auth/logout'),
+};
 
 // 订阅相关API
 export const subscriptionAPI = {
@@ -63,11 +124,30 @@ export const llmAPI = {
   parseSubscription: (description) => api.post('/parse-subscription', { description }),
 };
 
+// 导入导出API
+export const dataAPI = {
+  // 导出数据
+  exportData: () => api.get('/export-data', { responseType: 'blob' }),
+  
+  // 导入数据
+  importData: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/import-data', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+};
+
 const apiService = {
+  auth: authAPI,
   subscription: subscriptionAPI,
   statistics: statisticsAPI,
   notification: notificationAPI,
   llm: llmAPI,
+  data: dataAPI,
 };
 
 export default apiService;
