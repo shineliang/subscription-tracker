@@ -1581,13 +1581,19 @@ router.get('/analysis/recommendations', authenticateToken, async (req, res) => {
     // 3. 节省建议
     const monthlySubscriptions = subscriptions.filter(s => s.billing_cycle === 'monthly');
     if (monthlySubscriptions.length > 3) {
+      // 找出金额最大的前3个月付订阅作为示例
+      const topMonthlySubscriptions = monthlySubscriptions
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 3);
+      
       recommendations.push({
         type: 'savings',
         title: '切换到年付计划',
         description: `您有${monthlySubscriptions.length}个月付订阅，改为年付可节省10-20%`,
         priority: 'medium',
         actionable: true,
-        estimatedSavings: totalMonthlySpend * 0.15
+        estimatedSavings: totalMonthlySpend * 0.15,
+        relatedSubscriptions: topMonthlySubscriptions
       });
     }
     
@@ -1608,7 +1614,8 @@ router.get('/analysis/recommendations', authenticateToken, async (req, res) => {
         title: '寻找替代方案',
         description: '部分高价订阅可能有免费或更便宜的替代品',
         priority: 'low',
-        actionable: true
+        actionable: true,
+        relatedSubscriptions: expensiveSubscriptions.slice(0, 3) // 显示前3个高价订阅
       });
     }
     
@@ -1623,7 +1630,8 @@ router.get('/analysis/recommendations', authenticateToken, async (req, res) => {
         title: '试用期评估',
         description: `您有${newSubscriptions.length}个新订阅，记得在试用期结束前评估是否继续`,
         priority: 'high',
-        actionable: true
+        actionable: true,
+        relatedSubscriptions: newSubscriptions
       });
     }
     

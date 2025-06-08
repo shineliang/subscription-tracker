@@ -223,6 +223,24 @@ function IntelligentAnalysis() {
                     <h4 className="font-medium text-gray-900 dark:text-white">
                       {suggestion.title}
                     </h4>
+                    {suggestion.subscription && (
+                      <div className="bg-gray-100 dark:bg-gray-700 rounded p-2 mt-2 mb-2">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {suggestion.subscription.name}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {suggestion.subscription.provider} • {formatCurrency(suggestion.subscription.amount)}/{
+                            suggestion.subscription.billing_cycle === 'monthly' ? '月' :
+                            suggestion.subscription.billing_cycle === 'yearly' ? '年' :
+                            suggestion.subscription.billing_cycle === 'half_yearly' ? '半年' :
+                            suggestion.subscription.billing_cycle === 'quarterly' ? '季度' :
+                            suggestion.subscription.billing_cycle === 'weekly' ? '周' :
+                            suggestion.subscription.billing_cycle === 'daily' ? '日' :
+                            suggestion.subscription.billing_cycle
+                          }
+                        </p>
+                      </div>
+                    )}
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {suggestion.description}
                     </p>
@@ -553,6 +571,41 @@ function IntelligentAnalysis() {
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                       {rec.description}
                     </p>
+                    
+                    {/* 显示相关订阅 */}
+                    {rec.relatedSubscriptions && rec.relatedSubscriptions.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-medium text-gray-700 dark:text-gray-300">相关订阅：</p>
+                        {rec.relatedSubscriptions.map((sub, subIndex) => (
+                          <div key={subIndex} className="bg-gray-100 dark:bg-gray-700 rounded p-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                  {sub.name}
+                                </p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">
+                                  {sub.provider} • {formatCurrency(sub.amount)}/{
+                                    sub.billing_cycle === 'monthly' ? '月' :
+                                    sub.billing_cycle === 'yearly' ? '年' :
+                                    sub.billing_cycle === 'half_yearly' ? '半年' :
+                                    sub.billing_cycle === 'quarterly' ? '季度' :
+                                    sub.billing_cycle === 'weekly' ? '周' :
+                                    sub.billing_cycle === 'daily' ? '日' :
+                                    sub.billing_cycle
+                                  }
+                                </p>
+                              </div>
+                              {sub.category && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {sub.category}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
                     {rec.estimatedSavings && (
                       <p className="text-sm text-green-600 dark:text-green-400 mt-2">
                         预计节省: {formatCurrency(rec.estimatedSavings)}/月
