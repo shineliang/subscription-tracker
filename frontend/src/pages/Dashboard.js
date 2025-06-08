@@ -7,7 +7,9 @@ import {
   CalendarIcon, 
   ArrowTrendingUpIcon, 
   BanknotesIcon,
-  ArrowLongRightIcon
+  ArrowLongRightIcon,
+  LightBulbIcon,
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 import StatCard from '../components/StatCard';
 import SubscriptionCard from '../components/SubscriptionCard';
@@ -192,6 +194,35 @@ const Dashboard = () => {
           color="warning"
           footer="7天内即将到期的订阅"
         />
+      </div>
+      
+      {/* 快速操作 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link 
+          to="/analysis"
+          className="p-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">智能分析</h3>
+              <p className="text-sm opacity-90">AI驱动的订阅优化建议和成本分析</p>
+            </div>
+            <LightBulbIcon className="h-10 w-10 opacity-80" />
+          </div>
+        </Link>
+        
+        <Link 
+          to="/statistics"
+          className="p-6 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">统计报表</h3>
+              <p className="text-sm opacity-90">查看详细的支出统计和趋势分析</p>
+            </div>
+            <ChartBarIcon className="h-10 w-10 opacity-80" />
+          </div>
+        </Link>
       </div>
       
       {/* 预算状态 */}

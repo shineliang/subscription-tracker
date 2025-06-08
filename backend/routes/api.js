@@ -252,13 +252,24 @@ router.post('/subscriptions/:id/cancel', authenticateToken, validateId, (req, re
       return res.status(400).json({ error: '该订阅已经被取消' });
     }
     
-    // 更新订阅的cancelled_at字段
-    const updatedSubscription = {
-      ...subscription,
-      cancelled_at: new Date().toISOString()
+    // 只更新cancelled_at字段，保持其他字段不变
+    const updateData = {
+      name: subscription.name,
+      description: subscription.description,
+      provider: subscription.provider,
+      amount: subscription.amount,
+      currency: subscription.currency,
+      billing_cycle: subscription.billing_cycle,
+      cycle_count: subscription.cycle_count,
+      start_date: subscription.start_date,
+      next_payment_date: subscription.next_payment_date, // 保持原有的下次付款日期
+      reminder_days: subscription.reminder_days,
+      category: subscription.category,
+      active: subscription.active,
+      cancelled_at: new Date().toISOString() // 只有这个字段是新设置的
     };
     
-    Subscription.updateByUser(subscriptionId, req.user.id, updatedSubscription, (updateErr, result) => {
+    Subscription.updateByUser(subscriptionId, req.user.id, updateData, (updateErr, result) => {
       if (updateErr) {
         return res.status(500).json({ error: updateErr.message });
       }
@@ -1010,6 +1021,631 @@ router.put('/budget-alerts/mark-read', authenticateToken, (req, res) => {
     }
     res.json(result);
   });
+});
+
+// ========== 智能分析相关 API ==========
+
+// 重复订阅检测
+router.get('/analysis/duplicate-subscriptions', authenticateToken, (req, res) => {
+  Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    const duplicates = [];
+    const processed = new Set();
+    
+    subscriptions.forEach((sub1, i) => {
+      if (processed.has(sub1.id)) return;
+      
+      const similarSubs = [];
+      
+      subscriptions.forEach((sub2, j) => {
+        if (i === j || processed.has(sub2.id)) return;
+        
+        // 检测相同名称或提供商
+        const isSameName = sub1.name.toLowerCase() === sub2.name.toLowerCase();
+        const isSameProvider = sub1.provider && sub2.provider && 
+          sub1.provider.toLowerCase() === sub2.provider.toLowerCase();
+        
+        // 检测相似名称（使用简单的包含关系）
+        const isSimilarName = sub1.name.toLowerCase().includes(sub2.name.toLowerCase()) ||
+          sub2.name.toLowerCase().includes(sub1.name.toLowerCase());
+        
+        // 检测相同类别和相近金额（±20%）
+        const isSameCategory = sub1.category === sub2.category;
+        const amountRatio = Math.abs(sub1.amount - sub2.amount) / Math.max(sub1.amount, sub2.amount);
+        const isSimilarAmount = amountRatio <= 0.2;
+        
+        if ((isSameName || isSameProvider || (isSimilarName && isSameCategory && isSimilarAmount))) {
+          similarSubs.push(sub2);
+          processed.add(sub2.id);
+        }
+      });
+      
+      if (similarSubs.length > 0) {
+        processed.add(sub1.id);
+        duplicates.push({
+          main: sub1,
+          duplicates: similarSubs,
+          reason: similarSubs[0].name === sub1.name ? 'same_name' : 
+                  similarSubs[0].provider === sub1.provider ? 'same_provider' : 'similar',
+          potentialSavings: similarSubs.reduce((sum, s) => {
+            // 转换为月度金额进行比较
+            let monthlyAmount = s.amount;
+            switch (s.billing_cycle) {
+              case 'yearly': monthlyAmount = s.amount / 12; break;
+              case 'half_yearly': monthlyAmount = s.amount / 6; break;
+              case 'quarterly': monthlyAmount = s.amount / 3; break;
+              case 'weekly': monthlyAmount = s.amount * 4.33; break;
+              case 'daily': monthlyAmount = s.amount * 30.44; break;
+            }
+            return sum + monthlyAmount;
+          }, 0)
+        });
+      }
+    });
+    
+    res.json({
+      duplicates,
+      totalPotentialSavings: duplicates.reduce((sum, d) => sum + d.potentialSavings, 0),
+      count: duplicates.length
+    });
+  });
+});
+
+// 使用频率分析
+router.get('/analysis/usage-frequency', authenticateToken, (req, res) => {
+  const PaymentHistory = require('../models/paymentHistory');
+  const sixMonthsAgo = moment().subtract(6, 'months').format('YYYY-MM-DD');
+  
+  Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    const analysisPromises = subscriptions.map(sub => {
+      return new Promise((resolve) => {
+        PaymentHistory.getBySubscriptionId(sub.id, req.user.id, (err, payments) => {
+          if (err) {
+            resolve({ subscription: sub, analysis: { error: true } });
+            return;
+          }
+          
+          // 分析付款频率
+          const recentPayments = payments.filter(p => 
+            moment(p.payment_date).isAfter(sixMonthsAgo) && p.status === 'completed'
+          );
+          
+          // 计算预期付款次数
+          let expectedPayments = 0;
+          const monthsDiff = moment().diff(moment(sub.start_date), 'months');
+          
+          switch (sub.billing_cycle) {
+            case 'monthly': expectedPayments = Math.min(monthsDiff, 6); break;
+            case 'yearly': expectedPayments = monthsDiff >= 12 ? 1 : 0; break;
+            case 'half_yearly': expectedPayments = Math.floor(monthsDiff / 6); break;
+            case 'quarterly': expectedPayments = Math.floor(monthsDiff / 3); break;
+            case 'weekly': expectedPayments = Math.min(Math.floor(monthsDiff * 4.33), 26); break;
+            case 'daily': expectedPayments = Math.min(monthsDiff * 30, 180); break;
+          }
+          
+          const usageRate = expectedPayments > 0 ? 
+            (recentPayments.length / expectedPayments) * 100 : 100;
+          
+          resolve({
+            subscription: sub,
+            analysis: {
+              actualPayments: recentPayments.length,
+              expectedPayments,
+              usageRate: Math.min(usageRate, 100),
+              status: usageRate < 50 ? 'low' : usageRate < 80 ? 'medium' : 'high',
+              recommendation: usageRate < 50 ? 
+                '使用频率较低，建议考虑是否需要继续订阅' : 
+                usageRate < 80 ? '使用频率中等，可以考虑降级订阅计划' : '使用频率正常'
+            }
+          });
+        });
+      });
+    });
+    
+    Promise.all(analysisPromises).then(results => {
+      const lowUsageSubscriptions = results.filter(r => 
+        r.analysis.status === 'low' && !r.analysis.error
+      );
+      
+      res.json({
+        results: results.filter(r => !r.analysis.error),
+        lowUsageCount: lowUsageSubscriptions.length,
+        potentialSavings: lowUsageSubscriptions.reduce((sum, r) => {
+          let monthlyAmount = r.subscription.amount;
+          switch (r.subscription.billing_cycle) {
+            case 'yearly': monthlyAmount = r.subscription.amount / 12; break;
+            case 'half_yearly': monthlyAmount = r.subscription.amount / 6; break;
+            case 'quarterly': monthlyAmount = r.subscription.amount / 3; break;
+            case 'weekly': monthlyAmount = r.subscription.amount * 4.33; break;
+            case 'daily': monthlyAmount = r.subscription.amount * 30.44; break;
+          }
+          return sum + monthlyAmount;
+        }, 0)
+      });
+    });
+  });
+});
+
+// 成本效益分析
+router.get('/analysis/cost-benefit', authenticateToken, (req, res) => {
+  Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    // 按类别分组
+    const categoryAnalysis = {};
+    let totalMonthlySpend = 0;
+    
+    subscriptions.forEach(sub => {
+      const category = sub.category || '未分类';
+      
+      if (!categoryAnalysis[category]) {
+        categoryAnalysis[category] = {
+          subscriptions: [],
+          totalMonthlyAmount: 0,
+          averageAmount: 0
+        };
+      }
+      
+      // 转换为月度金额
+      let monthlyAmount = sub.amount;
+      switch (sub.billing_cycle) {
+        case 'yearly': monthlyAmount = sub.amount / 12; break;
+        case 'half_yearly': monthlyAmount = sub.amount / 6; break;
+        case 'quarterly': monthlyAmount = sub.amount / 3; break;
+        case 'weekly': monthlyAmount = sub.amount * 4.33; break;
+        case 'daily': monthlyAmount = sub.amount * 30.44; break;
+      }
+      
+      categoryAnalysis[category].subscriptions.push({
+        ...sub,
+        monthlyAmount
+      });
+      categoryAnalysis[category].totalMonthlyAmount += monthlyAmount;
+      totalMonthlySpend += monthlyAmount;
+    });
+    
+    // 计算平均值和占比
+    Object.keys(categoryAnalysis).forEach(category => {
+      const cat = categoryAnalysis[category];
+      cat.averageAmount = cat.totalMonthlyAmount / cat.subscriptions.length;
+      cat.percentage = (cat.totalMonthlyAmount / totalMonthlySpend) * 100;
+      
+      // 找出该类别中最贵的订阅
+      cat.mostExpensive = cat.subscriptions.reduce((max, sub) => 
+        sub.monthlyAmount > max.monthlyAmount ? sub : max
+      );
+      
+      // 成本效益评分（基于使用频率和金额）
+      cat.costBenefitScore = cat.percentage > 30 ? 'high_cost' : 
+                            cat.percentage > 15 ? 'medium_cost' : 'low_cost';
+    });
+    
+    // 生成优化建议
+    const recommendations = [];
+    
+    Object.entries(categoryAnalysis).forEach(([category, data]) => {
+      if (data.percentage > 30) {
+        recommendations.push({
+          category,
+          type: 'high_spending',
+          message: `${category}类别支出占比过高(${data.percentage.toFixed(1)}%)，建议审查该类别订阅`,
+          potentialSavings: data.totalMonthlyAmount * 0.2 // 假设可节省20%
+        });
+      }
+      
+      if (data.subscriptions.length > 3) {
+        recommendations.push({
+          category,
+          type: 'too_many_subscriptions',
+          message: `${category}类别订阅过多(${data.subscriptions.length}个)，建议整合或取消部分订阅`,
+          subscriptionCount: data.subscriptions.length
+        });
+      }
+    });
+    
+    res.json({
+      categoryAnalysis,
+      totalMonthlySpend,
+      recommendations,
+      topCategories: Object.entries(categoryAnalysis)
+        .sort((a, b) => b[1].totalMonthlyAmount - a[1].totalMonthlyAmount)
+        .slice(0, 5)
+        .map(([category, data]) => ({
+          category,
+          amount: data.totalMonthlyAmount,
+          percentage: data.percentage
+        }))
+    });
+  });
+});
+
+// 订阅优化建议
+router.get('/analysis/optimization-suggestions', authenticateToken, async (req, res) => {
+  try {
+    const [subscriptions, duplicates, usageAnalysis, costBenefit] = await Promise.all([
+      new Promise((resolve, reject) => {
+        Subscription.getAllByUser(req.user.id, (err, data) => {
+          if (err) reject(err);
+          else resolve(data);
+        });
+      }),
+      new Promise((resolve) => {
+        // 获取重复订阅分析
+        Subscription.getAllByUser(req.user.id, (err, subs) => {
+          if (err) {
+            resolve({ duplicates: [], totalPotentialSavings: 0 });
+            return;
+          }
+          
+          const duplicates = [];
+          const processed = new Set();
+          
+          subs.forEach((sub1, i) => {
+            if (processed.has(sub1.id)) return;
+            
+            const similarSubs = [];
+            subs.forEach((sub2, j) => {
+              if (i === j || processed.has(sub2.id)) return;
+              
+              if (sub1.name.toLowerCase() === sub2.name.toLowerCase() ||
+                  (sub1.provider && sub2.provider && 
+                   sub1.provider.toLowerCase() === sub2.provider.toLowerCase())) {
+                similarSubs.push(sub2);
+                processed.add(sub2.id);
+              }
+            });
+            
+            if (similarSubs.length > 0) {
+              processed.add(sub1.id);
+              duplicates.push({
+                main: sub1,
+                duplicates: similarSubs
+              });
+            }
+          });
+          
+          resolve({ duplicates });
+        });
+      }),
+      Promise.resolve({ results: [] }), // 简化使用频率分析
+      Promise.resolve({ categoryAnalysis: {} }) // 简化成本效益分析
+    ]);
+    
+    const suggestions = [];
+    let totalPotentialSavings = 0;
+    
+    // 1. 重复订阅建议
+    duplicates.duplicates.forEach(dup => {
+      suggestions.push({
+        type: 'duplicate',
+        priority: 'high',
+        subscription: dup.main,
+        title: '发现重复订阅',
+        description: `您有${dup.duplicates.length + 1}个相似的订阅服务`,
+        action: '建议保留一个，取消其他重复订阅',
+        savings: dup.duplicates.reduce((sum, s) => sum + s.amount, 0)
+      });
+      totalPotentialSavings += dup.duplicates.reduce((sum, s) => sum + s.amount, 0);
+    });
+    
+    // 2. 长期未使用建议
+    subscriptions.forEach(sub => {
+      const daysSincePayment = moment().diff(moment(sub.next_payment_date), 'days');
+      if (daysSincePayment > 60 && sub.active) {
+        suggestions.push({
+          type: 'unused',
+          priority: 'medium',
+          subscription: sub,
+          title: '长期未续费',
+          description: `该订阅已经${daysSincePayment}天未续费`,
+          action: '建议确认是否仍需要该服务',
+          savings: sub.amount
+        });
+        totalPotentialSavings += sub.amount;
+      }
+    });
+    
+    // 3. 年付优化建议
+    subscriptions.filter(sub => sub.billing_cycle === 'monthly').forEach(sub => {
+      const yearlyAmount = sub.amount * 12;
+      const potentialYearlySavings = yearlyAmount * 0.15; // 假设年付可节省15%
+      
+      if (potentialYearlySavings > 100) {
+        suggestions.push({
+          type: 'billing_optimization',
+          priority: 'low',
+          subscription: sub,
+          title: '计费周期优化',
+          description: '切换到年付可能节省费用',
+          action: `建议改为年付，预计每年节省￥${potentialYearlySavings.toFixed(2)}`,
+          savings: potentialYearlySavings / 12
+        });
+      }
+    });
+    
+    // 4. 高额订阅审查
+    const avgAmount = subscriptions.reduce((sum, s) => sum + s.amount, 0) / subscriptions.length;
+    subscriptions.filter(sub => sub.amount > avgAmount * 2).forEach(sub => {
+      suggestions.push({
+        type: 'high_cost',
+        priority: 'medium',
+        subscription: sub,
+        title: '高额订阅',
+        description: `该订阅费用是平均值的${(sub.amount / avgAmount).toFixed(1)}倍`,
+        action: '建议评估是否物有所值或寻找替代方案',
+        savings: 0
+      });
+    });
+    
+    // 按优先级排序
+    suggestions.sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
+    });
+    
+    res.json({
+      suggestions: suggestions.slice(0, 10), // 返回前10个建议
+      totalPotentialSavings,
+      subscriptionCount: subscriptions.length,
+      summary: {
+        duplicates: duplicates.duplicates.length,
+        unused: suggestions.filter(s => s.type === 'unused').length,
+        highCost: suggestions.filter(s => s.type === 'high_cost').length,
+        optimizable: suggestions.filter(s => s.type === 'billing_optimization').length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 趋势分析报告
+router.get('/analysis/trend-report', authenticateToken, (req, res) => {
+  const months = parseInt(req.query.months) || 6;
+  
+  Subscription.getMonthlyTrendByUser(req.user.id, (err, monthlyData) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    
+    // 只取指定月数的数据
+    const trendData = monthlyData.slice(0, months);
+    
+    // 计算趋势
+    const amounts = trendData.map(d => d.amount.CNY || 0);
+    const avgAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+    
+    // 计算增长率
+    let growthRate = 0;
+    if (amounts.length >= 2) {
+      const firstMonth = amounts[amounts.length - 1];
+      const lastMonth = amounts[0];
+      growthRate = firstMonth > 0 ? ((lastMonth - firstMonth) / firstMonth) * 100 : 0;
+    }
+    
+    // 找出波动
+    const volatility = Math.sqrt(
+      amounts.reduce((sum, amount) => sum + Math.pow(amount - avgAmount, 2), 0) / amounts.length
+    );
+    
+    // 预测下个月
+    let nextMonthPrediction = avgAmount;
+    if (amounts.length >= 3) {
+      // 简单线性回归预测
+      const recentAmounts = amounts.slice(0, 3);
+      const trend = (recentAmounts[0] - recentAmounts[2]) / 2;
+      nextMonthPrediction = recentAmounts[0] + trend;
+    }
+    
+    // 按类别分析趋势
+    Subscription.getAllByUser(req.user.id, (err, subscriptions) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      
+      const categoryTrends = {};
+      const currentDate = moment();
+      
+      subscriptions.forEach(sub => {
+        const category = sub.category || '未分类';
+        if (!categoryTrends[category]) {
+          categoryTrends[category] = {
+            current: 0,
+            previous: 0,
+            growth: 0
+          };
+        }
+        
+        // 计算月度金额
+        let monthlyAmount = sub.amount;
+        switch (sub.billing_cycle) {
+          case 'yearly': monthlyAmount = sub.amount / 12; break;
+          case 'half_yearly': monthlyAmount = sub.amount / 6; break;
+          case 'quarterly': monthlyAmount = sub.amount / 3; break;
+          case 'weekly': monthlyAmount = sub.amount * 4.33; break;
+          case 'daily': monthlyAmount = sub.amount * 30.44; break;
+        }
+        
+        // 判断是否为新订阅（3个月内）
+        const isNew = moment(sub.created_at).isAfter(currentDate.clone().subtract(3, 'months'));
+        
+        categoryTrends[category].current += monthlyAmount;
+        if (!isNew) {
+          categoryTrends[category].previous += monthlyAmount;
+        }
+      });
+      
+      // 计算各类别增长
+      Object.keys(categoryTrends).forEach(category => {
+        const trend = categoryTrends[category];
+        if (trend.previous > 0) {
+          trend.growth = ((trend.current - trend.previous) / trend.previous) * 100;
+        }
+      });
+      
+      res.json({
+        period: `过去${months}个月`,
+        trendData,
+        statistics: {
+          averageMonthlySpend: avgAmount,
+          growthRate,
+          volatility,
+          trend: growthRate > 5 ? 'increasing' : growthRate < -5 ? 'decreasing' : 'stable',
+          nextMonthPrediction: Math.max(0, nextMonthPrediction)
+        },
+        categoryTrends,
+        insights: [
+          growthRate > 10 ? '您的订阅支出呈快速增长趋势，建议审查新增订阅' : null,
+          growthRate < -10 ? '您的订阅支出在下降，优化措施正在生效' : null,
+          volatility > avgAmount * 0.3 ? '支出波动较大，可能存在不规律的大额订阅' : null,
+          Object.keys(categoryTrends).some(cat => categoryTrends[cat].growth > 50) ? 
+            '某些类别支出增长过快，需要关注' : null
+        ].filter(Boolean)
+      });
+    });
+  });
+});
+
+// 个性化推荐
+router.get('/analysis/recommendations', authenticateToken, async (req, res) => {
+  try {
+    const subscriptions = await new Promise((resolve, reject) => {
+      Subscription.getAllByUser(req.user.id, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+    
+    const recommendations = [];
+    
+    // 分析用户订阅模式
+    const categories = {};
+    let totalMonthlySpend = 0;
+    
+    subscriptions.forEach(sub => {
+      const category = sub.category || '未分类';
+      if (!categories[category]) {
+        categories[category] = { count: 0, amount: 0 };
+      }
+      
+      let monthlyAmount = sub.amount;
+      switch (sub.billing_cycle) {
+        case 'yearly': monthlyAmount = sub.amount / 12; break;
+        case 'half_yearly': monthlyAmount = sub.amount / 6; break;
+        case 'quarterly': monthlyAmount = sub.amount / 3; break;
+        case 'weekly': monthlyAmount = sub.amount * 4.33; break;
+        case 'daily': monthlyAmount = sub.amount * 30.44; break;
+      }
+      
+      categories[category].count++;
+      categories[category].amount += monthlyAmount;
+      totalMonthlySpend += monthlyAmount;
+    });
+    
+    // 基于用户行为生成推荐
+    
+    // 1. 套餐升级/降级建议
+    if (totalMonthlySpend > 1000) {
+      recommendations.push({
+        type: 'bundle',
+        title: '考虑企业套餐',
+        description: '您的订阅支出较高，某些服务的企业套餐可能更划算',
+        priority: 'high',
+        actionable: true
+      });
+    }
+    
+    // 2. 类别平衡建议
+    const dominantCategory = Object.entries(categories)
+      .sort((a, b) => b[1].amount - a[1].amount)[0];
+    
+    if (dominantCategory && dominantCategory[1].amount / totalMonthlySpend > 0.5) {
+      recommendations.push({
+        type: 'balance',
+        title: '订阅结构优化',
+        description: `${dominantCategory[0]}类别占比过高，建议多样化订阅组合`,
+        priority: 'medium',
+        actionable: true
+      });
+    }
+    
+    // 3. 节省建议
+    const monthlySubscriptions = subscriptions.filter(s => s.billing_cycle === 'monthly');
+    if (monthlySubscriptions.length > 3) {
+      recommendations.push({
+        type: 'savings',
+        title: '切换到年付计划',
+        description: `您有${monthlySubscriptions.length}个月付订阅，改为年付可节省10-20%`,
+        priority: 'medium',
+        actionable: true,
+        estimatedSavings: totalMonthlySpend * 0.15
+      });
+    }
+    
+    // 4. 免费替代方案
+    const expensiveSubscriptions = subscriptions.filter(s => {
+      let monthlyAmount = s.amount;
+      switch (s.billing_cycle) {
+        case 'yearly': monthlyAmount = s.amount / 12; break;
+        case 'half_yearly': monthlyAmount = s.amount / 6; break;
+        case 'quarterly': monthlyAmount = s.amount / 3; break;
+      }
+      return monthlyAmount > 200;
+    });
+    
+    if (expensiveSubscriptions.length > 0) {
+      recommendations.push({
+        type: 'alternative',
+        title: '寻找替代方案',
+        description: '部分高价订阅可能有免费或更便宜的替代品',
+        priority: 'low',
+        actionable: true
+      });
+    }
+    
+    // 5. 试用期提醒
+    const newSubscriptions = subscriptions.filter(s => 
+      moment().diff(moment(s.start_date), 'days') < 30
+    );
+    
+    if (newSubscriptions.length > 0) {
+      recommendations.push({
+        type: 'trial',
+        title: '试用期评估',
+        description: `您有${newSubscriptions.length}个新订阅，记得在试用期结束前评估是否继续`,
+        priority: 'high',
+        actionable: true
+      });
+    }
+    
+    res.json({
+      recommendations,
+      userProfile: {
+        totalSubscriptions: subscriptions.length,
+        monthlySpend: totalMonthlySpend,
+        dominantCategory: dominantCategory ? dominantCategory[0] : null,
+        spendingLevel: totalMonthlySpend < 500 ? 'low' : 
+                      totalMonthlySpend < 1500 ? 'medium' : 'high'
+      },
+      insights: {
+        savingsPotential: recommendations
+          .filter(r => r.estimatedSavings)
+          .reduce((sum, r) => sum + r.estimatedSavings, 0),
+        actionableRecommendations: recommendations.filter(r => r.actionable).length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;
