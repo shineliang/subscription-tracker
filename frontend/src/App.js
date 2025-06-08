@@ -18,7 +18,16 @@ import NotFound from './pages/NotFound';
 
 // 受保护的路由组件
 const ProtectedRoute = ({ children }) => {
-  const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+  let isAuthenticated = false;
+  
+  try {
+    isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+  } catch (error) {
+    console.error('无法访问localStorage:', error);
+    // 在隐私模式或localStorage不可用时的降级处理
+    isAuthenticated = false;
+  }
+  
   return isAuthenticated ? children : <Navigate to="/login" />;
 };
 

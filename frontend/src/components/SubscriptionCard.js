@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrency, formatDate, formatBillingCycle, daysUntil, getReminderStatus, getReminderStatusClass, getReminderStatusText } from '../services/utils';
 import { motion } from 'framer-motion';
@@ -88,6 +88,8 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
               {/* 续费按钮 */}
               <button
                 onClick={async () => {
+                  if (isRenewing) return; // 防止重复点击
+                  
                   try {
                     setIsRenewing(true);
                     const response = await subscriptionAPI.renew(id);
@@ -101,7 +103,7 @@ const SubscriptionCard = ({ subscription, onDelete, onUpdate }) => {
                   }
                 }}
                 disabled={isRenewing}
-                className="p-1 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400"
+                className={`p-1 text-gray-500 hover:text-green-500 dark:text-gray-400 dark:hover:text-green-400 ${isRenewing ? 'cursor-not-allowed opacity-50' : ''}`}
                 title="续费一个周期"
               >
                 <ArrowPathIcon className={`h-5 w-5 ${isRenewing ? 'animate-spin' : ''}`} />

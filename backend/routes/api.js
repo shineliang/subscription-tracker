@@ -7,9 +7,43 @@ const axios = require('axios');
 const moment = require('moment');
 const { Parser } = require('json2csv');
 const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
+const path = require('path');
+
+// 配置文件上传
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // 确保上传目录存在
+    const uploadDir = path.join(__dirname, '../uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    // 生成唯一文件名
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB 文件大小限制
+    files: 1 // 只允许上传一个文件
+  },
+  fileFilter: function (req, file, cb) {
+    // 只允许CSV文件
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.csv' || file.mimetype !== 'text/csv') {
+      return cb(new Error('只允许上传CSV文件'));
+    }
+    cb(null, true);
+  }
+});
 const fs = require('fs');
 const { parse } = require('csv-parse');
+const { validateSubscription, validateId, validateNotificationSettings } = require('../middleware/validation');
 
 // 计算下一个付款日期并完善订阅信息
 function extract_subscription_info(subscriptionInfo) {
@@ -124,7 +158,7 @@ router.get('/subscriptions', (req, res) => {
 });
 
 // 获取单个订阅
-router.get('/subscriptions/:id', (req, res) => {
+router.get('/subscriptions/:id', validateId, (req, res) => {
   Subscription.getById(req.params.id, (err, subscription) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -137,13 +171,8 @@ router.get('/subscriptions/:id', (req, res) => {
 });
 
 // 创建新订阅
-router.post('/subscriptions', (req, res) => {
+router.post('/subscriptions', validateSubscription, (req, res) => {
   const subscription = req.body;
-  
-  // 验证必需字段
-  if (!subscription.name || !subscription.amount || !subscription.billing_cycle || !subscription.start_date) {
-    return res.status(400).json({ error: '缺少必要的字段' });
-  }
 
   Subscription.create(subscription, (err, newSubscription) => {
     if (err) {
@@ -167,7 +196,7 @@ router.post('/subscriptions', (req, res) => {
 });
 
 // 更新订阅
-router.put('/subscriptions/:id', (req, res) => {
+router.put('/subscriptions/:id', validateId, validateSubscription, (req, res) => {
   const subscription = req.body;
   
   Subscription.update(req.params.id, subscription, (err, updatedSubscription) => {
@@ -192,7 +221,7 @@ router.put('/subscriptions/:id', (req, res) => {
 });
 
 // 删除订阅
-router.delete('/subscriptions/:id', (req, res) => {
+router.delete('/subscriptions/:id', validateId, (req, res) => {
   Subscription.delete(req.params.id, (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
@@ -202,7 +231,7 @@ router.delete('/subscriptions/:id', (req, res) => {
 });
 
 // 续费订阅（延长下次付款日期一个周期）
-router.post('/subscriptions/:id/renew', (req, res) => {
+router.post('/subscriptions/:id/renew', validateId, (req, res) => {
   const subscriptionId = req.params.id;
   
   // 获取订阅信息
@@ -335,7 +364,7 @@ router.get('/notification-settings', (req, res) => {
 });
 
 // 更新通知设置
-router.put('/notification-settings', (req, res) => {
+router.put('/notification-settings', validateNotificationSettings, (req, res) => {
   const settings = req.body;
   
   NotificationSetting.update(settings, (err, updatedSettings) => {
@@ -479,7 +508,20 @@ router.get('/export-data', async (req, res) => {
 });
 
 // 导入订阅数据
-router.post('/import-data', upload.single('file'), (req, res) => {
+router.post('/import-data', upload.single('file'), async (req, res) => {
+  const filePath = req.file ? req.file.path : null;
+  
+  // 文件清理函数
+  const cleanupFile = () => {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error('删除临时文件失败:', err);
+      }
+    }
+  };
+  
   try {
     if (!req.file) {
       return res.status(400).json({ error: '没有上传文件' });
@@ -495,6 +537,7 @@ router.post('/import-data', upload.single('file'), (req, res) => {
     const records = [];
     let successCount = 0;
     let errorCount = 0;
+    const errors = [];
 
     // 创建解析器流
     parser.on('readable', function() {
@@ -506,18 +549,25 @@ router.post('/import-data', upload.single('file'), (req, res) => {
         delete record.created_at;
         delete record.updated_at;
         
-        // 处理数值类型
-        if (record.amount) {
-          record.amount = parseFloat(record.amount);
+        // 处理数值类型和验证
+        if (record.amount !== undefined) {
+          const amount = parseFloat(record.amount);
+          if (isNaN(amount) || amount <= 0) {
+            errors.push(`无效的金额: ${record.amount}`);
+            continue;
+          }
+          record.amount = amount;
         }
-        if (record.reminder_days) {
-          record.reminder_days = parseInt(record.reminder_days);
+        if (record.reminder_days !== undefined) {
+          const days = parseInt(record.reminder_days);
+          record.reminder_days = isNaN(days) ? 7 : days;
         }
-        if (record.cycle_count) {
-          record.cycle_count = parseInt(record.cycle_count);
+        if (record.cycle_count !== undefined) {
+          const count = parseInt(record.cycle_count);
+          record.cycle_count = isNaN(count) ? 1 : count;
         }
         if (record.active !== undefined) {
-          record.active = parseInt(record.active);
+          record.active = parseInt(record.active) || 1;
         }
         
         records.push(record);
@@ -526,54 +576,62 @@ router.post('/import-data', upload.single('file'), (req, res) => {
 
     // 处理解析完成
     parser.on('end', async function() {
-      // 使用Promise.all处理所有导入
-      const importPromises = records.map(subscription => {
-        return new Promise((resolve) => {
-          const processedSubscription = extract_subscription_info(subscription);
-          Subscription.create(processedSubscription, (err) => {
-            if (err) {
-              console.error('导入订阅失败:', err);
-              errorCount++;
-            } else {
-              successCount++;
-            }
-            resolve();
+      try {
+        // 使用Promise.all处理所有导入
+        const importPromises = records.map((subscription, index) => {
+          return new Promise((resolve) => {
+            const processedSubscription = extract_subscription_info(subscription);
+            Subscription.create(processedSubscription, (err) => {
+              if (err) {
+                console.error(`导入第${index + 1}行失败:`, err);
+                errors.push(`第${index + 1}行: ${err.message}`);
+                errorCount++;
+              } else {
+                successCount++;
+              }
+              resolve();
+            });
           });
         });
-      });
 
-      await Promise.all(importPromises);
+        await Promise.all(importPromises);
 
-      // 删除临时文件
-      fs.unlinkSync(req.file.path);
+        // 清理文件
+        cleanupFile();
 
-      res.json({
-        message: '导入完成',
-        total: records.length,
-        success: successCount,
-        error: errorCount
-      });
+        res.json({
+          message: '导入完成',
+          total: records.length,
+          success: successCount,
+          error: errorCount,
+          errors: errors.slice(0, 10) // 最多返回10个错误信息
+        });
+      } catch (err) {
+        cleanupFile();
+        throw err;
+      }
     });
 
     // 处理解析错误
     parser.on('error', function(err) {
       console.error('解析CSV文件失败:', err);
-      // 如果文件存在，删除临时文件
-      if (req.file) {
-        fs.unlinkSync(req.file.path);
-      }
-      res.status(500).json({ error: '解析CSV文件失败' });
+      cleanupFile();
+      res.status(500).json({ error: '解析CSV文件失败: ' + err.message });
     });
 
     // 开始解析文件
-    fs.createReadStream(req.file.path).pipe(parser);
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', (err) => {
+      console.error('读取文件失败:', err);
+      cleanupFile();
+      res.status(500).json({ error: '读取文件失败' });
+    });
+    
+    stream.pipe(parser);
 
   } catch (error) {
     console.error('导入数据失败:', error);
-    // 如果文件存在，删除临时文件
-    if (req.file) {
-      fs.unlinkSync(req.file.path);
-    }
+    cleanupFile();
     res.status(500).json({ error: error.message });
   }
 });

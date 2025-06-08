@@ -249,6 +249,8 @@ const Settings = () => {
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
+                    // 释放URL对象
+                    window.URL.revokeObjectURL(url);
                     
                     toast.success('数据导出成功');
                   } catch (error) {

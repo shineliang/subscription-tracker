@@ -63,27 +63,45 @@ const AddSubscription = () => {
     }
   };
   
+  // 安全的月份添加函数
+  const addMonths = (date, months) => {
+    const newDate = new Date(date);
+    const day = newDate.getDate();
+    newDate.setMonth(newDate.getMonth() + months);
+    
+    // 处理月末日期溢出
+    if (newDate.getDate() !== day) {
+      newDate.setDate(0); // 设置为上个月的最后一天
+    }
+    
+    return newDate;
+  };
+
   const calculateNextPaymentDate = () => {
     if (!formData.start_date) return;
     
     const startDate = new Date(formData.start_date);
     let nextDate = new Date(startDate);
+    const cycleCount = Number(formData.cycle_count) || 1;
     
     switch (formData.billing_cycle) {
       case 'monthly':
-        nextDate.setMonth(startDate.getMonth() + Number(formData.cycle_count));
+        nextDate = addMonths(startDate, cycleCount);
         break;
       case 'yearly':
-        nextDate.setFullYear(startDate.getFullYear() + Number(formData.cycle_count));
+        nextDate = addMonths(startDate, 12 * cycleCount);
+        break;
+      case 'half_yearly':
+        nextDate = addMonths(startDate, 6 * cycleCount);
         break;
       case 'quarterly':
-        nextDate.setMonth(startDate.getMonth() + (3 * Number(formData.cycle_count)));
+        nextDate = addMonths(startDate, 3 * cycleCount);
         break;
       case 'weekly':
-        nextDate.setDate(startDate.getDate() + (7 * Number(formData.cycle_count)));
+        nextDate.setDate(startDate.getDate() + (7 * cycleCount));
         break;
       case 'daily':
-        nextDate.setDate(startDate.getDate() + Number(formData.cycle_count));
+        nextDate.setDate(startDate.getDate() + cycleCount);
         break;
       default:
         nextDate = startDate;
@@ -101,12 +119,22 @@ const AddSubscription = () => {
     try {
       setLoading(true);
       
-      // 确保金额是数字
+      // 验证和转换数值
+      const amount = parseFloat(formData.amount);
+      const cycleCount = parseInt(formData.cycle_count) || 1;
+      const reminderDays = parseInt(formData.reminder_days) || 7;
+      
+      if (isNaN(amount) || amount <= 0) {
+        toast.error('请输入有效的金额');
+        setLoading(false);
+        return;
+      }
+      
       const formattedData = {
         ...formData,
-        amount: parseFloat(formData.amount),
-        cycle_count: parseInt(formData.cycle_count),
-        reminder_days: parseInt(formData.reminder_days),
+        amount: amount,
+        cycle_count: cycleCount,
+        reminder_days: reminderDays,
       };
       
       await subscriptionAPI.create(formattedData);

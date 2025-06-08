@@ -68,7 +68,61 @@ const Dashboard = () => {
   };
   
   useEffect(() => {
-    fetchData();
+    let mounted = true;
+    
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        
+        // 获取即将到期的订阅
+        const upcomingRes = await subscriptionAPI.getUpcoming(7);
+        
+        // 获取所有订阅
+        const allSubscriptionsRes = await subscriptionAPI.getAll();
+        const allSubscriptions = allSubscriptionsRes.data;
+        
+        // 获取月度支出
+        const monthlyRes = await statisticsAPI.getMonthlySpending();
+        const monthlyData = monthlyRes.data;
+        
+        // 获取年度支出
+        const yearlyRes = await statisticsAPI.getYearlySpending();
+        const yearlyData = yearlyRes.data;
+        
+        if (mounted) {
+          setUpcomingSubscriptions(upcomingRes.data);
+          
+          // 计算统计数据
+          setStats({
+            totalMonthly: { 
+              amount: monthlyData.totals.CNY || 0, 
+              currency: 'CNY' 
+            },
+            totalYearly: { 
+              amount: yearlyData.totals.CNY || 0, 
+              currency: 'CNY' 
+            },
+            totalActive: allSubscriptions.filter(sub => sub.active).length,
+            expiringThisWeek: upcomingRes.data.length
+          });
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error('Error fetching dashboard data:', error);
+          toast.error('获取数据失败，请稍后再试');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadData();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
   
   const handleDelete = async (id) => {
