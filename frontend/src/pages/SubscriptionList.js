@@ -27,6 +27,7 @@ const SubscriptionList = () => {
   const [sortBy, setSortBy] = useState('next_payment_date'); // name, amount, next_payment_date
   const [sortOrder, setSortOrder] = useState('asc'); // asc或desc
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // all, active, cancelled
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null });
   
   const fetchSubscriptions = async () => {
@@ -66,6 +67,15 @@ const SubscriptionList = () => {
       result = result.filter(sub => sub.category === filterCategory);
     }
     
+    // 状态过滤
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'active') {
+        result = result.filter(sub => !sub.cancelled_at);
+      } else if (filterStatus === 'cancelled') {
+        result = result.filter(sub => sub.cancelled_at);
+      }
+    }
+    
     // 排序
     result.sort((a, b) => {
       let comparison = 0;
@@ -88,7 +98,7 @@ const SubscriptionList = () => {
     });
     
     setFilteredSubscriptions(result);
-  }, [subscriptions, searchTerm, sortBy, sortOrder, filterCategory]);
+  }, [subscriptions, searchTerm, sortBy, sortOrder, filterCategory, filterStatus]);
   
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -107,6 +117,18 @@ const SubscriptionList = () => {
   
   const handleFilterChange = (e) => {
     setFilterCategory(e.target.value);
+  };
+  
+  const handleStatusFilterChange = (e) => {
+    setFilterStatus(e.target.value);
+  };
+  
+  // 计算状态统计
+  const getStatusCounts = () => {
+    const total = subscriptions.length;
+    const active = subscriptions.filter(sub => !sub.cancelled_at).length;
+    const cancelled = subscriptions.filter(sub => sub.cancelled_at).length;
+    return { total, active, cancelled };
   };
   
   const handleDelete = async (id) => {
@@ -144,6 +166,130 @@ const SubscriptionList = () => {
     return categories;
   };
   
+  // 渲染表格内容的辅助函数
+  const renderTableContent = (subscriptionList) => (
+    <table className="min-w-full divide-y divide-gray-200 dark:divide-dark-600">
+      <thead className="bg-gray-50 dark:bg-dark-800">
+        <tr>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            名称
+          </th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            金额
+          </th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            周期
+          </th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            到期日期
+          </th>
+          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            状态
+          </th>
+          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            操作
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white dark:bg-dark-700 divide-y divide-gray-200 dark:divide-dark-600">
+        {subscriptionList.map((subscription) => {
+          const days = daysUntil(subscription.next_payment_date);
+          const status = days < 0 ? 'expired' : days === 0 ? 'today' : days <= 3 ? 'soon' : days <= 7 ? 'upcoming' : 'safe';
+          const statusClass = getReminderStatusClass(status);
+          const statusText = getReminderStatusText(status);
+          
+          return (
+            <tr key={subscription.id} className="hover:bg-gray-50 dark:hover:bg-dark-600">
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      {subscription.name}
+                    </div>
+                    {subscription.provider && (
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {subscription.provider}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm text-gray-900 dark:text-white">
+                  {formatCurrency(subscription.amount, subscription.currency)}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm text-gray-900 dark:text-white">
+                  {formatBillingCycle(subscription.billing_cycle, subscription.cycle_count)}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm text-gray-900 dark:text-white">
+                  {formatDate(subscription.next_payment_date)}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {subscription.cancelled_at
+                    ? '已取消'
+                    : days < 0 
+                    ? `已过期${Math.abs(days)}天` 
+                    : days === 0 
+                    ? '今天到期' 
+                    : `${days}天后到期`}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {subscription.cancelled_at ? (
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                    已取消
+                  </span>
+                ) : (
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
+                    {statusText}
+                  </span>
+                )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <div className="flex justify-end space-x-3">
+                  {!subscription.cancelled_at && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await subscriptionAPI.renew(subscription.id);
+                          toast.success('订阅已成功续费一个周期');
+                          handleSubscriptionRenew(response.data);
+                        } catch (error) {
+                          console.error('续费失败:', error);
+                          toast.error('续费失败，请稍后再试');
+                        }
+                      }}
+                      className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                      title="续费一个周期"
+                    >
+                      续费
+                    </button>
+                  )}
+                  <Link 
+                    to={`/subscriptions/edit/${subscription.id}`}
+                    className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    编辑
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(subscription.id)}
+                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    删除
+                  </button>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+  
   if (loading) {
     return <Loader />;
   }
@@ -151,7 +297,21 @@ const SubscriptionList = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-dark-600 dark:text-white">所有订阅</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-dark-600 dark:text-white">所有订阅</h1>
+          {/* 状态统计 */}
+          <div className="flex space-x-4 mt-2 text-sm">
+            <span className="text-gray-600 dark:text-gray-400">
+              总计: <span className="font-semibold">{getStatusCounts().total}</span>
+            </span>
+            <span className="text-green-600 dark:text-green-400">
+              活跃: <span className="font-semibold">{getStatusCounts().active}</span>
+            </span>
+            <span className="text-red-600 dark:text-red-400">
+              已取消: <span className="font-semibold">{getStatusCounts().cancelled}</span>
+            </span>
+          </div>
+        </div>
         <Link
           to="/subscriptions/add"
           className="btn-primary"
@@ -176,6 +336,19 @@ const SubscriptionList = () => {
               value={searchTerm}
               onChange={handleSearchChange}
             />
+          </div>
+          
+          {/* 状态过滤 */}
+          <div className="w-full md:w-40">
+            <select
+              className="form-select"
+              value={filterStatus}
+              onChange={handleStatusFilterChange}
+            >
+              <option value="all">全部</option>
+              <option value="active">活跃</option>
+              <option value="cancelled">已取消</option>
+            </select>
           </div>
           
           {/* 类别过滤 */}
@@ -263,130 +436,72 @@ const SubscriptionList = () => {
       
       {/* 订阅列表 */}
       {filteredSubscriptions.length > 0 ? (
-        viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSubscriptions.map((subscription) => (
-              <SubscriptionCard 
-                key={subscription.id}
-                subscription={subscription}
-                onDelete={handleDelete}
-                onUpdate={handleSubscriptionRenew}
-              />
-            ))}
+        filterStatus === 'all' && subscriptions.some(sub => sub.cancelled_at) ? (
+          // 分组显示：活跃订阅和已取消订阅
+          <div className="space-y-8">
+            {/* 活跃订阅 */}
+            {filteredSubscriptions.filter(sub => !sub.cancelled_at).length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">活跃订阅</h2>
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredSubscriptions.filter(sub => !sub.cancelled_at).map((subscription) => (
+                      <SubscriptionCard 
+                        key={subscription.id}
+                        subscription={subscription}
+                        onDelete={handleDelete}
+                        onUpdate={handleSubscriptionRenew}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-dark-700 rounded-lg shadow overflow-hidden mb-6">
+                    {renderTableContent(filteredSubscriptions.filter(sub => !sub.cancelled_at))}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* 已取消订阅 */}
+            {filteredSubscriptions.filter(sub => sub.cancelled_at).length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4">已取消订阅</h2>
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredSubscriptions.filter(sub => sub.cancelled_at).map((subscription) => (
+                      <SubscriptionCard 
+                        key={subscription.id}
+                        subscription={subscription}
+                        onDelete={handleDelete}
+                        onUpdate={handleSubscriptionRenew}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-dark-700 rounded-lg shadow overflow-hidden">
+                    {renderTableContent(filteredSubscriptions.filter(sub => sub.cancelled_at))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="bg-white dark:bg-dark-700 rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-dark-600">
-              <thead className="bg-gray-50 dark:bg-dark-800">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    名称
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    金额
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    周期
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    到期日期
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    状态
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-dark-700 divide-y divide-gray-200 dark:divide-dark-600">
-                {filteredSubscriptions.map((subscription) => {
-                  const days = daysUntil(subscription.next_payment_date);
-                  const status = days < 0 ? 'expired' : days === 0 ? 'today' : days <= 3 ? 'soon' : days <= 7 ? 'upcoming' : 'safe';
-                  const statusClass = getReminderStatusClass(status);
-                  const statusText = getReminderStatusText(status);
-                  
-                  return (
-                    <tr key={subscription.id} className="hover:bg-gray-50 dark:hover:bg-dark-600">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {subscription.name}
-                            </div>
-                            {subscription.provider && (
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {subscription.provider}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {formatCurrency(subscription.amount, subscription.currency)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {formatBillingCycle(subscription.billing_cycle, subscription.cycle_count)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {formatDate(subscription.next_payment_date)}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {days < 0 
-                            ? `已过期${Math.abs(days)}天` 
-                            : days === 0 
-                            ? '今天到期' 
-                            : `${days}天后到期`}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
-                          {statusText}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-3">
-                          <button
-                            onClick={async () => {
-                              try {
-                                const response = await subscriptionAPI.renew(subscription.id);
-                                toast.success('订阅已成功续费一个周期');
-                                handleSubscriptionRenew(response.data);
-                              } catch (error) {
-                                console.error('续费失败:', error);
-                                toast.error('续费失败，请稍后再试');
-                              }
-                            }}
-                            className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                            title="续费一个周期"
-                          >
-                            续费
-                          </button>
-                          <Link 
-                            to={`/subscriptions/edit/${subscription.id}`}
-                            className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
-                          >
-                            编辑
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(subscription.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            删除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredSubscriptions.map((subscription) => (
+                <SubscriptionCard 
+                  key={subscription.id}
+                  subscription={subscription}
+                  onDelete={handleDelete}
+                  onUpdate={handleSubscriptionRenew}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-dark-700 rounded-lg shadow overflow-hidden">
+              {renderTableContent(filteredSubscriptions)}
+            </div>
+          )
         )
       ) : (
         <motion.div
