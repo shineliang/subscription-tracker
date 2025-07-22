@@ -85,21 +85,28 @@ const AnimatedPage = ({ children }) => {
 };
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    // 首先检查localStorage中的主题偏好
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      return savedTheme === 'dark';
+    }
+    // 如果没有保存的主题，则使用系统偏好
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const location = useLocation();
   
-  // 检测系统主题偏好
+  // 保存主题偏好到localStorage并应用到document
   useEffect(() => {
-    const isDarkPreferred = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setDarkMode(isDarkPreferred);
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
     
-    // 监听主题变化
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => setDarkMode(e.matches);
-    mediaQuery.addEventListener('change', handleChange);
-    
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
+    // 应用dark类到document.documentElement以确保Tailwind正确工作
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
   
   return (
     <div className={darkMode ? 'dark' : ''}>
