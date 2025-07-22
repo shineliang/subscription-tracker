@@ -14,6 +14,7 @@ import { toast } from 'react-toastify';
 import axios from 'axios';
 import Loader from '../components/Loader';
 import EmptyState from '../components/EmptyState';
+import { formatCurrency } from '../services/utils';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -118,9 +119,6 @@ function IntelligentAnalysis() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return `¥${amount.toFixed(2)}`;
-  };
 
   const getPriorityColor = (priority) => {
     switch (priority) {

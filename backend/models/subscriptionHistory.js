@@ -28,7 +28,7 @@ class SubscriptionHistory {
       const query = `
         INSERT INTO subscription_history 
         (subscription_id, user_id, change_type, notes)
-        VALUES (?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4)
       `;
       
       db.run(query, [subscriptionId, userId, changeType, notes], callback);
@@ -39,7 +39,7 @@ class SubscriptionHistory {
   static getBySubscriptionId(subscriptionId, userId, callback) {
     const query = `
       SELECT * FROM subscription_history 
-      WHERE subscription_id = ? AND user_id = ?
+      WHERE subscription_id = $1 AND user_id = $2
       ORDER BY change_date DESC
     `;
     
@@ -52,9 +52,9 @@ class SubscriptionHistory {
       SELECT sh.*, s.name as subscription_name
       FROM subscription_history sh
       JOIN subscriptions s ON sh.subscription_id = s.id
-      WHERE sh.user_id = ?
+      WHERE sh.user_id = $1
       ORDER BY sh.change_date DESC
-      LIMIT ? OFFSET ?
+      LIMIT $2 OFFSET $3
     `;
     
     db.all(query, [userId, limit, offset], callback);
@@ -73,7 +73,7 @@ class SubscriptionHistory {
   
   // 批量记录变更（用于导入等场景）
   static batchRecord(records, callback) {
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map((_, i) => `(${i*7+1}, ${i*7+2}, ${i*7+3}, ${i*7+4}, ${i*7+5}, ${i*7+6}, ${i*7+7})`).join(', ');
     const values = [];
     
     records.forEach(record => {

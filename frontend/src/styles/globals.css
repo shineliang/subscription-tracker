@@ -1,0 +1,276 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Premium CSS Variables */
+:root {
+  /* Light mode colors */
+  --color-background: 255 255 255;
+  --color-surface: 249 250 251;
+  --color-surface-elevated: 255 255 255;
+  --color-text-primary: 17 24 39;
+  --color-text-secondary: 107 114 128;
+  --color-text-tertiary: 156 163 175;
+  
+  /* Gradient stops */
+  --gradient-start: rgb(139, 92, 246);
+  --gradient-middle: rgb(168, 85, 247);
+  --gradient-end: rgb(217, 70, 239);
+  
+  /* Shadows */
+  --shadow-color: 0deg 0% 63%;
+  --shadow-elevation-low:
+    0.3px 0.5px 0.7px hsl(var(--shadow-color) / 0.10),
+    0.4px 0.8px 1px -1.2px hsl(var(--shadow-color) / 0.10),
+    1px 2px 2.5px -2.5px hsl(var(--shadow-color) / 0.10);
+  --shadow-elevation-medium:
+    0.3px 0.5px 0.7px hsl(var(--shadow-color) / 0.11),
+    0.8px 1.6px 2px -0.8px hsl(var(--shadow-color) / 0.11),
+    2.1px 4.1px 5.2px -1.7px hsl(var(--shadow-color) / 0.11),
+    5px 10px 12.6px -2.5px hsl(var(--shadow-color) / 0.11);
+  --shadow-elevation-high:
+    0.3px 0.5px 0.7px hsl(var(--shadow-color) / 0.10),
+    1.5px 2.9px 3.7px -0.4px hsl(var(--shadow-color) / 0.10),
+    2.7px 5.4px 6.8px -0.7px hsl(var(--shadow-color) / 0.10),
+    4.5px 8.9px 11.2px -1.1px hsl(var(--shadow-color) / 0.10),
+    7.1px 14.3px 18px -1.4px hsl(var(--shadow-color) / 0.10),
+    11.2px 22.3px 28.1px -1.8px hsl(var(--shadow-color) / 0.10),
+    17px 33.9px 42.7px -2.1px hsl(var(--shadow-color) / 0.10),
+    25px 50px 62.9px -2.5px hsl(var(--shadow-color) / 0.10);
+  
+  /* Blur values */
+  --blur-xs: 2px;
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+  --blur-xl: 24px;
+  
+  /* Spring animation values */
+  --spring-duration: 600ms;
+  --spring-easing: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: 0 0 0;
+    --color-surface: 10 10 10;
+    --color-surface-elevated: 23 23 23;
+    --color-text-primary: 248 250 252;
+    --color-text-secondary: 148 163 184;
+    --color-text-tertiary: 100 116 139;
+    
+    --shadow-color: 0deg 0% 0%;
+  }
+}
+
+[data-theme="dark"] {
+  --color-background: 0 0 0;
+  --color-surface: 10 10 10;
+  --color-surface-elevated: 23 23 23;
+  --color-text-primary: 248 250 252;
+  --color-text-secondary: 148 163 184;
+  --color-text-tertiary: 100 116 139;
+  
+  --shadow-color: 0deg 0% 0%;
+}
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-neutral-200 dark:border-neutral-800;
+  }
+  
+  body {
+    @apply bg-[rgb(var(--color-background))] text-[rgb(var(--color-text-primary))];
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Premium focus styles */
+  *:focus {
+    @apply outline-none;
+  }
+  
+  *:focus-visible {
+    @apply ring-2 ring-primary-500 ring-offset-2 ring-offset-[rgb(var(--color-background))];
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-neutral-100 dark:bg-neutral-900;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-neutral-300 dark:bg-neutral-700 rounded-full;
+    @apply hover:bg-neutral-400 dark:hover:bg-neutral-600;
+  }
+  
+  /* Selection styles */
+  ::selection {
+    @apply bg-primary-500/20 text-primary-900 dark:text-primary-100;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Glass morphism base */
+  .glass-morphism {
+    @apply bg-glass-white dark:bg-glass-dark;
+    @apply backdrop-blur-md border border-glass-border dark:border-glass-darkBorder;
+    @apply shadow-glass;
+  }
+  
+  /* Premium button base */
+  .btn-premium {
+    @apply relative overflow-hidden;
+    @apply transition-all duration-300 ease-spring;
+    @apply active:scale-[0.98];
+  }
+  
+  .btn-premium::before {
+    @apply absolute inset-0 opacity-0;
+    @apply bg-gradient-to-r from-white/20 to-white/0;
+    @apply transition-opacity duration-300;
+    content: '';
+  }
+  
+  .btn-premium:hover::before {
+    @apply opacity-100;
+  }
+  
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-500 ease-out;
+    @apply hover:-translate-y-1 hover:shadow-premium-lg;
+  }
+  
+  /* Text gradient animation */
+  .text-gradient-animate {
+    @apply bg-gradient-to-r from-primary-500 via-secondary-500 to-accent-500;
+    @apply bg-[length:200%_auto] animate-shimmer;
+    @apply bg-clip-text text-transparent;
+  }
+  
+  /* Magnetic hover effect */
+  .magnetic-hover {
+    @apply transition-transform duration-300 ease-out;
+  }
+  
+  /* Glow effect */
+  .glow {
+    @apply relative;
+  }
+  
+  .glow::after {
+    @apply absolute inset-0 opacity-0 blur-xl;
+    @apply bg-gradient-premium rounded-2xl;
+    @apply transition-opacity duration-300;
+    @apply -z-10;
+    content: '';
+  }
+  
+  .glow:hover::after {
+    @apply opacity-50;
+  }
+  
+  /* Neumorphic styles */
+  .neumorphic {
+    @apply bg-neutral-100 dark:bg-neutral-900;
+    @apply shadow-neumorphic dark:shadow-none;
+  }
+  
+  .neumorphic-inset {
+    @apply bg-neutral-100 dark:bg-neutral-900;
+    @apply shadow-neumorphic-inset dark:shadow-inner;
+  }
+  
+  /* Loading skeleton */
+  .skeleton {
+    @apply relative overflow-hidden bg-neutral-200 dark:bg-neutral-800;
+  }
+  
+  .skeleton::after {
+    @apply absolute inset-0;
+    @apply bg-gradient-to-r from-transparent via-white/20 to-transparent;
+    @apply animate-shimmer;
+    content: '';
+  }
+}
+
+/* Utility styles */
+@layer utilities {
+  /* Hide scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* Premium transitions */
+  .transition-premium {
+    @apply transition-all duration-500 ease-spring;
+  }
+  
+  /* Perspective for 3D effects */
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+  
+  /* Backdrop filters for all browsers */
+  .backdrop-blur-safari {
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  /* Gradient borders */
+  .gradient-border {
+    @apply relative;
+    background: linear-gradient(rgb(var(--color-background)), rgb(var(--color-background))) padding-box,
+                linear-gradient(135deg, rgb(139, 92, 246), rgb(217, 70, 239)) border-box;
+    border: 2px solid transparent;
+  }
+  
+  /* Mesh gradient background */
+  .mesh-gradient {
+    @apply relative;
+    background-image: 
+      radial-gradient(at 40% 20%, rgb(139, 92, 246, 0.3) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, rgb(217, 70, 239, 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, rgb(168, 85, 247, 0.3) 0px, transparent 50%),
+      radial-gradient(at 80% 50%, rgb(249, 115, 22, 0.3) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgb(139, 92, 246, 0.3) 0px, transparent 50%);
+  }
+}
+
+/* Font loading optimization - using system fonts for now */
+/* TODO: Add custom font files when ready */
+
+/* Performance optimizations */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

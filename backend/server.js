@@ -212,7 +212,7 @@ const server = app.listen(PORT, () => {
 });
 
 // 导入数据库实例以便关闭
-const { database } = require('./db/database');
+const db = require('./db/database');
 
 // 优雅退出处理
 const gracefulShutdown = async (signal) => {
@@ -222,8 +222,10 @@ const gracefulShutdown = async (signal) => {
   server.close(async () => {
     try {
       // 关闭数据库连接
-      await database.close();
-      console.log('数据库连接已关闭');
+      if (db && db.close) {
+        await db.close();
+        console.log('数据库连接已关闭');
+      }
       
       // 清理其他资源
       console.log('服务器优雅关闭完成');
@@ -241,5 +243,13 @@ const gracefulShutdown = async (signal) => {
   }, 30000);
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+// 移除之前的监听器（如果有的话）
+process.removeAllListeners('SIGTERM');
+process.removeAllListeners('SIGINT');
+
+// 添加新的监听器
+process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// 增加最大监听器限制
+server.setMaxListeners(20);

@@ -7,7 +7,7 @@ class PaymentHistory {
     const query = `
       INSERT INTO payment_history 
       (subscription_id, user_id, amount, currency, payment_date, payment_method, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `;
     
     const values = [
@@ -31,7 +31,7 @@ class PaymentHistory {
   static getBySubscriptionId(subscriptionId, userId, callback) {
     const query = `
       SELECT * FROM payment_history 
-      WHERE subscription_id = ? AND user_id = ?
+      WHERE subscription_id = $1 AND user_id = $2
       ORDER BY payment_date DESC
     `;
     
@@ -39,14 +39,14 @@ class PaymentHistory {
   }
   
   // 获取用户的所有付款历史
-  static getAllByUser(userId, limit = 100, offset = 0, callback) {
+  static getAllByUser(userId, limit = 100, offset = false, callback) {
     const query = `
       SELECT ph.*, s.name as subscription_name, s.provider
       FROM payment_history ph
       JOIN subscriptions s ON ph.subscription_id = s.id
-      WHERE ph.user_id = ?
+      WHERE ph.user_id = $1
       ORDER BY ph.payment_date DESC
-      LIMIT ? OFFSET ?
+      LIMIT $2 OFFSET $3
     `;
     
     db.all(query, [userId, limit, offset], callback);
@@ -58,7 +58,7 @@ class PaymentHistory {
       SELECT ph.*, s.name as subscription_name, s.provider, s.category
       FROM payment_history ph
       JOIN subscriptions s ON ph.subscription_id = s.id
-      WHERE ph.user_id = ? AND ph.payment_date BETWEEN ? AND ?
+      WHERE ph.user_id = $1 AND ph.payment_date BETWEEN $2 AND $3
       ORDER BY ph.payment_date DESC
     `;
     
@@ -73,7 +73,7 @@ class PaymentHistory {
         COUNT(*) as payment_count,
         SUM(CASE WHEN currency = 'CNY' THEN amount ELSE amount * 7 END) as total_amount
       FROM payment_history
-      WHERE user_id = ? AND strftime('%Y', payment_date) = ?
+      WHERE user_id = ? AND TO_CHAR(payment_date, 'YYYY') = ?
       GROUP BY month
       ORDER BY month
     `;
@@ -88,7 +88,7 @@ class PaymentHistory {
       SELECT ph.*, s.name as subscription_name, s.provider
       FROM payment_history ph
       JOIN subscriptions s ON ph.subscription_id = s.id
-      WHERE ph.user_id = ? AND ph.payment_date >= ?
+      WHERE ph.user_id = $1 AND ph.payment_date >= $2
       ORDER BY ph.payment_date DESC
     `;
     
@@ -99,8 +99,8 @@ class PaymentHistory {
   static updateStatus(paymentId, userId, status, callback) {
     const query = `
       UPDATE payment_history 
-      SET status = ?
-      WHERE id = ? AND user_id = ?
+      SET status = $1
+      WHERE id = $2 AND user_id = $3
     `;
     
     db.run(query, [status, paymentId, userId], callback);
@@ -108,7 +108,7 @@ class PaymentHistory {
   
   // 批量记录付款（用于导入历史数据）
   static batchRecord(payments, callback) {
-    const placeholders = payments.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = payments.map((_, i) => `(${i*8+1}, ${i*8+2}, ${i*8+3}, ${i*8+4}, ${i*8+5}, ${i*8+6}, ${i*8+7}, ${i*8+8})`).join(', ');
     const values = [];
     
     payments.forEach(payment => {
@@ -138,7 +138,7 @@ class PaymentHistory {
     const query = `
       SELECT COUNT(*) as count
       FROM payment_history
-      WHERE subscription_id = ? AND user_id = ? AND payment_date = ?
+      WHERE subscription_id = $1 AND user_id = $2 AND payment_date = $3
     `;
     
     db.get(query, [subscriptionId, userId, paymentDate], (err, row) => {

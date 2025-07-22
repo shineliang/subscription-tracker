@@ -1,5 +1,5 @@
+const bcrypt = require('bcryptjs');
 const db = require('../db/database');
-const bcrypt = require('bcrypt');
 
 class User {
   // 创建新用户
@@ -14,8 +14,7 @@ class User {
 
       // 检查用户名是否已存在
       const existingUser = await new Promise((resolve, reject) => {
-        db.get(
-          'SELECT id FROM users WHERE username = ? OR email = ?',
+        db.get(`SELECT id FROM users WHERE username = $1 OR email = $2`,
           [username, email],
           (err, row) => {
             if (err) reject(err);
@@ -35,7 +34,7 @@ class User {
       // 插入新用户
       const query = `
         INSERT INTO users (username, email, password_hash, full_name)
-        VALUES (?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4)
       `;
       
       db.run(query, [username, email, passwordHash, full_name || null], function(err) {
@@ -46,6 +45,7 @@ class User {
         // 返回新创建的用户（不包含密码）
         User.getById(this.lastID, callback);
       });
+      
     } catch (error) {
       callback(error);
     }
@@ -56,7 +56,7 @@ class User {
     const query = `
       SELECT id, username, email, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE id = ?
+      WHERE id = $1
     `;
     
     db.get(query, [id], (err, user) => {
@@ -69,7 +69,7 @@ class User {
     const query = `
       SELECT id, username, email, password_hash, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE username = ?
+      WHERE username = $1
     `;
     
     db.get(query, [username], (err, user) => {
@@ -82,7 +82,7 @@ class User {
     const query = `
       SELECT id, username, email, password_hash, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE email = ?
+      WHERE email = $1
     `;
     
     db.get(query, [email], (err, user) => {
@@ -91,8 +91,8 @@ class User {
   }
 
   // 验证密码
-  static async verifyPassword(plainPassword, passwordHash) {
-    return await bcrypt.compare(plainPassword, passwordHash);
+  static async verifyPassword(password, passwordHash) {
+    return await bcrypt.compare(password, passwordHash);
   }
 
   // 更新用户信息
@@ -102,16 +102,16 @@ class User {
     const values = [];
 
     if (email !== undefined) {
-      updates.push('email = ?');
+      updates.push('email = $' + (values.length + 1));
       values.push(email);
     }
     if (full_name !== undefined) {
-      updates.push('full_name = ?');
+      updates.push('full_name = $' + (values.length + 1));
       values.push(full_name);
     }
     if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      values.push(is_active ? 1 : 0);
+      updates.push('is_active = $' + (values.length + 1));
+      values.push(is_active);
     }
 
     if (updates.length === 0) {
@@ -124,7 +124,7 @@ class User {
     const query = `
       UPDATE users
       SET ${updates.join(', ')}
-      WHERE id = ?
+      WHERE id = $${values.length}
     `;
 
     db.run(query, values, function(err) {
@@ -148,8 +148,8 @@ class User {
 
       const query = `
         UPDATE users
-        SET password_hash = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
       `;
 
       db.run(query, [passwordHash, id], function(err) {
@@ -173,7 +173,7 @@ class User {
     const query = `
       UPDATE users
       SET last_login_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = $1
     `;
 
     db.run(query, [id], (err) => {
@@ -185,8 +185,8 @@ class User {
   static delete(id, callback) {
     const query = `
       UPDATE users
-      SET is_active = 0, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
     `;
 
     db.run(query, [id], function(err) {
@@ -207,10 +207,10 @@ class User {
     const query = `
       SELECT 
         COUNT(*) as total_subscriptions,
-        COUNT(CASE WHEN active = 1 THEN 1 END) as active_subscriptions,
-        SUM(CASE WHEN active = 1 THEN amount ELSE 0 END) as total_monthly_amount
+        COUNT(CASE WHEN active = true THEN 1 END) as active_subscriptions,
+        SUM(CASE WHEN active = true THEN amount ELSE 0 END) as total_monthly_amount
       FROM subscriptions
-      WHERE user_id = ?
+      WHERE user_id = $1
     `;
 
     db.get(query, [userId], (err, stats) => {

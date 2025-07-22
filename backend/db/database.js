@@ -1,147 +1,114 @@
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
-const fs = require('fs');
-const DatabaseMigration = require('./migrations');
+require('dotenv').config();
 
-class Database {
-  constructor() {
-    this.db = null;
-    this.isClosing = false;
-  }
+// PostgreSQL连接配置
+const pgConfig = {
+  host: process.env.PG_HOST || '192.168.1.73',
+  port: process.env.PG_PORT || 5432,
+  database: process.env.PG_DATABASE || 'subscription_tracker',
+  user: process.env.PG_USER || 'subscription_app',
+  password: process.env.PG_PASSWORD || 'sub_app_2024',
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+};
 
-  connect() {
-    return new Promise((resolve, reject) => {
-      // 确保db目录存在
-      const dbDir = path.join(__dirname);
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-      }
+// 创建连接池
+const pool = new Pool(pgConfig);
 
-      const dbPath = path.join(dbDir, 'subscription_tracker.db');
-      
-      this.db = new sqlite3.Database(dbPath, (err) => {
-        if (err) {
-          console.error('数据库连接失败:', err);
-          reject(err);
-        } else {
-          console.log('数据库连接成功');
-          this.initDb()
-            .then(() => {
-              // 运行数据库迁移
-              const migration = new DatabaseMigration(this.db);
-              return migration.runMigrations();
-            })
-            .then(resolve)
-            .catch(reject);
-        }
-      });
-    });
-  }
-
-  initDb() {
-    return new Promise((resolve, reject) => {
-      this.db.serialize(() => {
-        this.db.run('BEGIN TRANSACTION');
-        
-        // 创建订阅表
-        this.db.run(`
-          CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            provider TEXT,
-            amount REAL NOT NULL,
-            currency TEXT NOT NULL DEFAULT 'CNY',
-            billing_cycle TEXT NOT NULL,
-            cycle_count INTEGER DEFAULT 1,
-            start_date TEXT NOT NULL,
-            next_payment_date TEXT NOT NULL,
-            reminder_days INTEGER DEFAULT 7,
-            category TEXT,
-            active INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )
-        `);
-
-        // 创建提醒表
-        this.db.run(`
-          CREATE TABLE IF NOT EXISTS reminders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            subscription_id INTEGER NOT NULL,
-            reminder_date TEXT NOT NULL,
-            sent INTEGER DEFAULT 0,
-            FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
-          )
-        `);
-
-        // 创建通知设置表
-        this.db.run(`
-          CREATE TABLE IF NOT EXISTS notification_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT,
-            notify_days_before INTEGER DEFAULT 7,
-            email_notifications INTEGER DEFAULT 1,
-            browser_notifications INTEGER DEFAULT 1
-          )
-        `);
-
-        this.db.run('COMMIT', (err) => {
-          if (err) {
-            this.db.run('ROLLBACK');
-            console.error('数据库初始化失败:', err);
-            reject(err);
-          } else {
-            console.log('数据库初始化成功');
-            resolve();
-          }
-        });
-      });
-    });
-  }
-
-  close() {
-    return new Promise((resolve, reject) => {
-      if (this.isClosing) {
-        resolve();
-        return;
-      }
-      
-      this.isClosing = true;
-      
-      if (this.db) {
-        this.db.close((err) => {
-          if (err) {
-            console.error('数据库关闭失败:', err);
-            reject(err);
-          } else {
-            console.log('数据库连接已关闭');
-            resolve();
-          }
-        });
-      } else {
-        resolve();
-      }
-    });
-  }
-
-  getConnection() {
-    if (!this.db) {
-      throw new Error('数据库未连接，请先调用 connect() 方法');
-    }
-    return this.db;
-  }
-}
-
-// 创建单例实例
-const database = new Database();
-
-// 自动连接数据库
-database.connect().catch(err => {
-  console.error('初始数据库连接失败:', err);
-  process.exit(1);
+// 错误处理
+pool.on('error', (err, client) => {
+  console.error('数据库连接池错误:', err);
 });
 
-// 导出数据库连接和实例
-module.exports = database.getConnection();
-module.exports.database = database;
+// 兼容旧的回调式API的数据库对象
+const db = {
+  // 查询单条记录（回调式）
+  get: (query, params, callback) => {
+    // 支持两种调用方式
+    if (typeof params === 'function') {
+      callback = params;
+      params = [];
+    }
+    
+    pool.query(query, params)
+      .then(result => {
+        callback(null, result.rows[0] || null);
+      })
+      .catch(error => {
+        console.error('数据库查询错误:', error);
+        callback(error, null);
+      });
+  },
+
+  // 查询多条记录（回调式）
+  all: (query, params, callback) => {
+    // 支持两种调用方式
+    if (typeof params === 'function') {
+      callback = params;
+      params = [];
+    }
+    
+    pool.query(query, params)
+      .then(result => {
+        callback(null, result.rows);
+      })
+      .catch(error => {
+        console.error('数据库查询错误:', error);
+        callback(error, null);
+      });
+  },
+
+  // 执行操作（INSERT, UPDATE, DELETE）（回调式）
+  run: function(query, params, callback) {
+    // 支持两种调用方式
+    if (typeof params === 'function') {
+      callback = params;
+      params = [];
+    }
+    
+    // 处理INSERT语句，自动添加RETURNING id
+    if (query.trim().toUpperCase().startsWith('INSERT') && !query.includes('RETURNING')) {
+      query = query.trim().replace(/;?\s*$/, ' RETURNING id');
+    }
+    
+    pool.query(query, params)
+      .then(result => {
+        // 模拟SQLite的this对象
+        const thisObj = {
+          lastID: result.rows[0]?.id || null,
+          changes: result.rowCount
+        };
+        
+        if (callback) {
+          callback.call(thisObj, null);
+        }
+      })
+      .catch(error => {
+        console.error('数据库操作错误:', error);
+        if (callback) {
+          callback.call({ lastID: null, changes: 0 }, error);
+        }
+      });
+  },
+
+  // 关闭连接池
+  close: async () => {
+    await pool.end();
+  }
+};
+
+// 导出数据库对象
+module.exports = db;
+
+// 测试数据库连接
+(async () => {
+  try {
+    const result = await pool.query('SELECT NOW() as current_time');
+    console.log('PostgreSQL数据库连接成功:', result.rows[0].current_time);
+  } catch (error) {
+    console.error('PostgreSQL数据库连接失败:', error.message);
+    console.error('请检查数据库配置和网络连接');
+  }
+})();

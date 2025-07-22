@@ -9,12 +9,15 @@ import {
   BanknotesIcon,
   ArrowLongRightIcon,
   LightBulbIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import StatCard from '../components/StatCard';
 import SubscriptionCard from '../components/SubscriptionCard';
 import Loader from '../components/Loader';
 import EmptyState from '../components/EmptyState';
+import Card from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
 import { subscriptionAPI, statisticsAPI, budgetAPI } from '../services/api';
 import { formatCurrency } from '../services/utils';
 
@@ -155,12 +158,23 @@ const Dashboard = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-dark-600 dark:text-white">仪表盘</h1>
-        <Link
-          to="/subscriptions/add"
-          className="btn-primary"
+        <motion.h1 
+          className="text-3xl font-display font-bold text-neutral-900 dark:text-white"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
         >
-          添加新订阅
+          仪表盘
+        </motion.h1>
+        <Link to="/subscriptions/add">
+          <Button 
+            variant="gradient" 
+            size="lg"
+            icon={<PlusIcon className="w-5 h-5" />}
+            glow
+          >
+            添加新订阅
+          </Button>
         </Link>
       </div>
       

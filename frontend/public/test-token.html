@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Token Test</title>
+</head>
+<body>
+    <h1>Token Test</h1>
+    <div id="result"></div>
+    <script>
+        const token = localStorage.getItem('token');
+        const sessionToken = sessionStorage.getItem('token');
+        
+        document.getElementById('result').innerHTML = `
+            <p>LocalStorage Token: ${token ? 'Found (' + token.substring(0, 20) + '...)' : 'Not Found'}</p>
+            <p>SessionStorage Token: ${sessionToken ? 'Found (' + sessionToken.substring(0, 20) + '...)' : 'Not Found'}</p>
+        `;
+        
+        if (token) {
+            // 解析JWT token
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const expDate = new Date(payload.exp * 1000);
+                const isExpired = expDate < new Date();
+                
+                document.getElementById('result').innerHTML += `
+                    <p>Token User: ${payload.username}</p>
+                    <p>Token Expires: ${expDate.toLocaleString()}</p>
+                    <p>Is Expired: ${isExpired ? 'Yes' : 'No'}</p>
+                `;
+            } catch (e) {
+                document.getElementById('result').innerHTML += '<p>Error parsing token</p>';
+            }
+        }
+    </script>
+</body>
+</html>

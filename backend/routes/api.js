@@ -112,11 +112,11 @@ function extract_subscription_info(subscriptionInfo) {
   }
   
   if (!processedInfo.cycle_count) {
-    processedInfo.cycle_count = 1;
+    processedInfo.cycle_count = true;
   }
   
   if (processedInfo.active === undefined) {
-    processedInfo.active = 1;
+    processedInfo.active = true;
   }
   
   return processedInfo;
@@ -1072,13 +1072,13 @@ router.get('/analysis/duplicate-subscriptions', authenticateToken, (req, res) =>
                   similarSubs[0].provider === sub1.provider ? 'same_provider' : 'similar',
           potentialSavings: similarSubs.reduce((sum, s) => {
             // 转换为月度金额进行比较
-            let monthlyAmount = s.amount;
+            let monthlyAmount = parseFloat(s.amount);
             switch (s.billing_cycle) {
-              case 'yearly': monthlyAmount = s.amount / 12; break;
-              case 'half_yearly': monthlyAmount = s.amount / 6; break;
-              case 'quarterly': monthlyAmount = s.amount / 3; break;
-              case 'weekly': monthlyAmount = s.amount * 4.33; break;
-              case 'daily': monthlyAmount = s.amount * 30.44; break;
+              case 'yearly': monthlyAmount = parseFloat(s.amount) / 12; break;
+              case 'half_yearly': monthlyAmount = parseFloat(s.amount) / 6; break;
+              case 'quarterly': monthlyAmount = parseFloat(s.amount) / 3; break;
+              case 'weekly': monthlyAmount = parseFloat(s.amount) * 4.33; break;
+              case 'daily': monthlyAmount = parseFloat(s.amount) * 30.44; break;
             }
             return sum + monthlyAmount;
           }, 0)
@@ -1158,13 +1158,13 @@ router.get('/analysis/usage-frequency', authenticateToken, (req, res) => {
         results: results.filter(r => !r.analysis.error),
         lowUsageCount: lowUsageSubscriptions.length,
         potentialSavings: lowUsageSubscriptions.reduce((sum, r) => {
-          let monthlyAmount = r.subscription.amount;
+          let monthlyAmount = parseFloat(r.subscription.amount);
           switch (r.subscription.billing_cycle) {
-            case 'yearly': monthlyAmount = r.subscription.amount / 12; break;
-            case 'half_yearly': monthlyAmount = r.subscription.amount / 6; break;
-            case 'quarterly': monthlyAmount = r.subscription.amount / 3; break;
-            case 'weekly': monthlyAmount = r.subscription.amount * 4.33; break;
-            case 'daily': monthlyAmount = r.subscription.amount * 30.44; break;
+            case 'yearly': monthlyAmount = parseFloat(r.subscription.amount) / 12; break;
+            case 'half_yearly': monthlyAmount = parseFloat(r.subscription.amount) / 6; break;
+            case 'quarterly': monthlyAmount = parseFloat(r.subscription.amount) / 3; break;
+            case 'weekly': monthlyAmount = parseFloat(r.subscription.amount) * 4.33; break;
+            case 'daily': monthlyAmount = parseFloat(r.subscription.amount) * 30.44; break;
           }
           return sum + monthlyAmount;
         }, 0)
@@ -1196,13 +1196,13 @@ router.get('/analysis/cost-benefit', authenticateToken, (req, res) => {
       }
       
       // 转换为月度金额
-      let monthlyAmount = sub.amount;
+      let monthlyAmount = parseFloat(sub.amount);
       switch (sub.billing_cycle) {
-        case 'yearly': monthlyAmount = sub.amount / 12; break;
-        case 'half_yearly': monthlyAmount = sub.amount / 6; break;
-        case 'quarterly': monthlyAmount = sub.amount / 3; break;
-        case 'weekly': monthlyAmount = sub.amount * 4.33; break;
-        case 'daily': monthlyAmount = sub.amount * 30.44; break;
+        case 'yearly': monthlyAmount = parseFloat(sub.amount) / 12; break;
+        case 'half_yearly': monthlyAmount = parseFloat(sub.amount) / 6; break;
+        case 'quarterly': monthlyAmount = parseFloat(sub.amount) / 3; break;
+        case 'weekly': monthlyAmount = parseFloat(sub.amount) * 4.33; break;
+        case 'daily': monthlyAmount = parseFloat(sub.amount) * 30.44; break;
       }
       
       categoryAnalysis[category].subscriptions.push({
@@ -1332,9 +1332,9 @@ router.get('/analysis/optimization-suggestions', authenticateToken, async (req, 
         title: '发现重复订阅',
         description: `您有${dup.duplicates.length + 1}个相似的订阅服务`,
         action: '建议保留一个，取消其他重复订阅',
-        savings: dup.duplicates.reduce((sum, s) => sum + s.amount, 0)
+        savings: dup.duplicates.reduce((sum, s) => sum + parseFloat(s.amount), 0)
       });
-      totalPotentialSavings += dup.duplicates.reduce((sum, s) => sum + s.amount, 0);
+      totalPotentialSavings += dup.duplicates.reduce((sum, s) => sum + parseFloat(s.amount), 0);
     });
     
     // 2. 长期未使用建议
@@ -1348,9 +1348,9 @@ router.get('/analysis/optimization-suggestions', authenticateToken, async (req, 
           title: '长期未续费',
           description: `该订阅已经${daysSincePayment}天未续费`,
           action: '建议确认是否仍需要该服务',
-          savings: sub.amount
+          savings: parseFloat(sub.amount)
         });
-        totalPotentialSavings += sub.amount;
+        totalPotentialSavings += parseFloat(sub.amount);
       }
     });
     
@@ -1466,13 +1466,13 @@ router.get('/analysis/trend-report', authenticateToken, (req, res) => {
         }
         
         // 计算月度金额
-        let monthlyAmount = sub.amount;
+        let monthlyAmount = parseFloat(sub.amount);
         switch (sub.billing_cycle) {
-          case 'yearly': monthlyAmount = sub.amount / 12; break;
-          case 'half_yearly': monthlyAmount = sub.amount / 6; break;
-          case 'quarterly': monthlyAmount = sub.amount / 3; break;
-          case 'weekly': monthlyAmount = sub.amount * 4.33; break;
-          case 'daily': monthlyAmount = sub.amount * 30.44; break;
+          case 'yearly': monthlyAmount = parseFloat(sub.amount) / 12; break;
+          case 'half_yearly': monthlyAmount = parseFloat(sub.amount) / 6; break;
+          case 'quarterly': monthlyAmount = parseFloat(sub.amount) / 3; break;
+          case 'weekly': monthlyAmount = parseFloat(sub.amount) * 4.33; break;
+          case 'daily': monthlyAmount = parseFloat(sub.amount) * 30.44; break;
         }
         
         // 判断是否为新订阅（3个月内）
@@ -1537,13 +1537,13 @@ router.get('/analysis/recommendations', authenticateToken, async (req, res) => {
         categories[category] = { count: 0, amount: 0 };
       }
       
-      let monthlyAmount = sub.amount;
+      let monthlyAmount = parseFloat(sub.amount);
       switch (sub.billing_cycle) {
-        case 'yearly': monthlyAmount = sub.amount / 12; break;
-        case 'half_yearly': monthlyAmount = sub.amount / 6; break;
-        case 'quarterly': monthlyAmount = sub.amount / 3; break;
-        case 'weekly': monthlyAmount = sub.amount * 4.33; break;
-        case 'daily': monthlyAmount = sub.amount * 30.44; break;
+        case 'yearly': monthlyAmount = parseFloat(sub.amount) / 12; break;
+        case 'half_yearly': monthlyAmount = parseFloat(sub.amount) / 6; break;
+        case 'quarterly': monthlyAmount = parseFloat(sub.amount) / 3; break;
+        case 'weekly': monthlyAmount = parseFloat(sub.amount) * 4.33; break;
+        case 'daily': monthlyAmount = parseFloat(sub.amount) * 30.44; break;
       }
       
       categories[category].count++;

@@ -12,7 +12,7 @@ class DatabaseMigration {
     return new Promise((resolve, reject) => {
       this.db.run(`
         CREATE TABLE IF NOT EXISTS migrations (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           name TEXT NOT NULL UNIQUE,
           executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -26,8 +26,7 @@ class DatabaseMigration {
   // 检查迁移是否已执行
   async isMigrationExecuted(name) {
     return new Promise((resolve, reject) => {
-      this.db.get(
-        'SELECT * FROM migrations WHERE name = ?',
+      this.db.get(`SELECT * FROM migrations WHERE name = $1`,
         [name],
         (err, row) => {
           if (err) reject(err);
@@ -40,8 +39,7 @@ class DatabaseMigration {
   // 记录迁移执行
   async recordMigration(name) {
     return new Promise((resolve, reject) => {
-      this.db.run(
-        'INSERT INTO migrations (name) VALUES (?)',
+      this.db.run(`INSERT INTO migrations (name) VALUES ($1)`,
         [name],
         (err) => {
           if (err) reject(err);
@@ -109,12 +107,12 @@ class DatabaseMigration {
         // 创建用户表
         this.db.run(`
           CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
             email TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             full_name TEXT,
-            is_active INTEGER DEFAULT 1,
+            is_active BOOLEAN DEFAULT true,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login_at TIMESTAMP
@@ -218,12 +216,12 @@ class DatabaseMigration {
         // 创建新表结构
         this.db.run(`
           CREATE TABLE notification_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             email TEXT,
             notify_days_before INTEGER DEFAULT 7,
-            email_notifications INTEGER DEFAULT 1,
-            browser_notifications INTEGER DEFAULT 1,
+            email_notifications BOOLEAN DEFAULT true,
+            browser_notifications BOOLEAN DEFAULT true,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id),
@@ -275,7 +273,7 @@ class DatabaseMigration {
         // 创建订阅变更历史表
         this.db.run(`
           CREATE TABLE IF NOT EXISTS subscription_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             subscription_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             change_type TEXT NOT NULL, -- 'created', 'updated', 'cancelled', 'reactivated'
@@ -296,7 +294,7 @@ class DatabaseMigration {
           // 创建付款历史表
           this.db.run(`
             CREATE TABLE IF NOT EXISTS payment_history (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id SERIAL PRIMARY KEY,
               subscription_id INTEGER NOT NULL,
               user_id INTEGER NOT NULL,
               amount DECIMAL(10,2) NOT NULL,
@@ -389,7 +387,7 @@ class DatabaseMigration {
         // 创建预算表
         this.db.run(`
           CREATE TABLE IF NOT EXISTS budgets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             type TEXT NOT NULL CHECK(type IN ('total', 'category')), -- 总预算或分类预算
@@ -398,7 +396,7 @@ class DatabaseMigration {
             currency TEXT DEFAULT 'CNY',
             category TEXT, -- 如果是分类预算，指定类别
             warning_threshold INTEGER DEFAULT 80, -- 预警阈值（百分比）
-            is_active INTEGER DEFAULT 1,
+            is_active BOOLEAN DEFAULT true,
             start_date DATE,
             end_date DATE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -415,7 +413,7 @@ class DatabaseMigration {
           // 创建预算历史表（记录预算变更）
           this.db.run(`
             CREATE TABLE IF NOT EXISTS budget_history (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              id SERIAL PRIMARY KEY,
               budget_id INTEGER NOT NULL,
               user_id INTEGER NOT NULL,
               period_start DATE NOT NULL,
@@ -424,7 +422,7 @@ class DatabaseMigration {
               spent_amount DECIMAL(10,2) DEFAULT 0,
               remaining_amount DECIMAL(10,2),
               usage_percentage DECIMAL(5,2),
-              exceeded INTEGER DEFAULT 0,
+              exceeded BOOLEAN DEFAULT false,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
               FOREIGN KEY (user_id) REFERENCES users(id)
@@ -438,13 +436,13 @@ class DatabaseMigration {
             // 创建预算警告记录表
             this.db.run(`
               CREATE TABLE IF NOT EXISTS budget_alerts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 budget_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
                 alert_type TEXT NOT NULL CHECK(alert_type IN ('warning', 'exceeded')),
                 usage_percentage DECIMAL(5,2) NOT NULL,
                 message TEXT,
-                is_read INTEGER DEFAULT 0,
+                is_read BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id)

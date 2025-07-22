@@ -36,6 +36,15 @@ export const calculateNextPaymentDate = (startDate, billingCycle, cycleCount = 1
 export const formatCurrency = (amount, currency = 'CNY', options = {}) => {
   if (amount === undefined || amount === null) return '';
   
+  // Ensure amount is a number
+  const numericAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+  
+  // Check if conversion resulted in a valid number
+  if (isNaN(numericAmount)) {
+    console.warn('formatCurrency received invalid amount:', amount);
+    return '';
+  }
+  
   const formatter = new Intl.NumberFormat('zh-CN', {
     style: 'currency',
     currency,
@@ -44,7 +53,7 @@ export const formatCurrency = (amount, currency = 'CNY', options = {}) => {
     ...options,
   });
   
-  return formatter.format(amount);
+  return formatter.format(numericAmount);
 };
 
 // 计费周期格式化
@@ -174,3 +183,8 @@ export const getCategoryOptions = () => [
   { value: '健康', label: '健康' },
   { value: '其他', label: '其他' },
 ];
+
+// Class names utility function (similar to clsx)
+export const cn = (...classes) => {
+  return classes.filter(Boolean).join(' ');
+};

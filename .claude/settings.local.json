@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(sqlite3:*)",
+      "Bash(cp:*)",
+      "Bash(kill:*)",
+      "Bash(npm start)",
+      "Bash(curl:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "mcp__browsermcp__browser_navigate",
+      "mcp__browsermcp__browser_snapshot",
+      "mcp__browsermcp__browser_get_console_logs",
+      "mcp__browsermcp__browser_click",
+      "mcp__browsermcp__browser_wait",
+      "mcp__browsermcp__browser_press_key",
+      "mcp__browsermcp__browser_type",
+      "Bash(npm run build:*)"
+    ],
+    "deny": []
+  }
+}

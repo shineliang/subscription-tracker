@@ -8,7 +8,7 @@ class Subscription {
   static getAllByUser(userId, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY next_payment_date ASC
     `;
     
@@ -39,7 +39,7 @@ class Subscription {
   static getByIdAndUser(id, userId, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE id = ? AND user_id = ?
+      WHERE id = $1 AND user_id = $2
     `;
     
     db.get(query, [id, userId], (err, row) => {
@@ -54,7 +54,7 @@ class Subscription {
   static getById(id, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE id = ?
+      WHERE id = $1
     `;
     
     db.get(query, [id], (err, row) => {
@@ -89,7 +89,7 @@ class Subscription {
         user_id, name, description, provider, amount, currency, 
         billing_cycle, cycle_count, start_date, next_payment_date, 
         reminder_days, category, active, cancelled_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `;
     
     db.run(
@@ -160,11 +160,11 @@ class Subscription {
 
       const query = `
         UPDATE subscriptions 
-        SET name = ?, description = ?, provider = ?, amount = ?, 
-            currency = ?, billing_cycle = ?, cycle_count = ?, 
-            start_date = ?, next_payment_date = ?, reminder_days = ?, 
-            category = ?, active = ?, cancelled_at = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND user_id = ?
+        SET name = $1, description = $2, provider = $3, amount = $4, 
+            currency = $5, billing_cycle = $6, cycle_count = $7, 
+            start_date = $8, next_payment_date = $9, reminder_days = $10, 
+            category = $11, active = $12, cancelled_at = $13, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $14 AND user_id = $15
       `;
       
       db.run(
@@ -251,21 +251,21 @@ class Subscription {
 
     const query = `
       UPDATE subscriptions 
-      SET name = ?,
-          description = ?,
-          provider = ?,
-          amount = ?,
-          currency = ?,
-          billing_cycle = ?,
-          cycle_count = ?,
-          start_date = ?,
-          next_payment_date = ?,
-          reminder_days = ?,
-          category = ?,
-          active = ?,
-          cancelled_at = ?,
+      SET name = $1,
+          description = $2,
+          provider = $3,
+          amount = $4,
+          currency = $5,
+          billing_cycle = $6,
+          cycle_count = $7,
+          start_date = $8,
+          next_payment_date = $9,
+          reminder_days = $10,
+          category = $11,
+          active = $12,
+          cancelled_at = $13,
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = $14
     `;
     
     db.run(
@@ -302,7 +302,7 @@ class Subscription {
       if (err) return callback(err);
       if (!subscription) return callback(new Error('订阅不存在或无权限'));
       
-      const query = `UPDATE subscriptions SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?`;
+      const query = `UPDATE subscriptions SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`;
       
       db.run(query, [id, userId], function(err) {
         if (err) {
@@ -333,7 +333,7 @@ class Subscription {
   
   // 删除订阅（不验证用户）
   static delete(id, callback) {
-    const query = `DELETE FROM subscriptions WHERE id = ?`;
+    const query = `DELETE FROM subscriptions WHERE id = $1`;
     
     db.run(query, [id], function(err) {
       if (err) {
@@ -350,9 +350,9 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE user_id = ?
-      AND next_payment_date BETWEEN ? AND ?
-      AND active = 1
+      WHERE user_id = $1
+      AND next_payment_date BETWEEN $2 AND $3
+      AND active = true
       AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
     `;
@@ -372,8 +372,8 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE next_payment_date BETWEEN ? AND ?
-      AND active = 1
+      WHERE next_payment_date BETWEEN $1 AND $2
+      AND active = true
       AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
     `;
@@ -392,8 +392,8 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE next_payment_date < ?
-      AND active = 1
+      WHERE next_payment_date < $1
+      AND active = true
       ORDER BY next_payment_date ASC
     `;
     
@@ -421,7 +421,7 @@ class Subscription {
         currency,
         billing_cycle
       FROM subscriptions
-      WHERE active = 1
+      WHERE active = true
     `;
     
     db.all(query, [], (err, rows) => {
@@ -435,7 +435,7 @@ class Subscription {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += row.monthly_amount;
+        totals[row.currency] += parseFloat(row.monthly_amount);
       });
       
       callback(null, { 
@@ -461,7 +461,7 @@ class Subscription {
         currency,
         billing_cycle
       FROM subscriptions
-      WHERE active = 1
+      WHERE active = true
     `;
     
     db.all(query, [], (err, rows) => {
@@ -475,7 +475,7 @@ class Subscription {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += row.yearly_amount;
+        totals[row.currency] += parseFloat(row.yearly_amount);
       });
       
       callback(null, { 
@@ -515,7 +515,7 @@ class Subscription {
         SUM(${amountExpression}) as total_amount,
         currency
       FROM subscriptions
-      WHERE active = 1
+      WHERE active = true
       GROUP BY category, currency
     `;
     
@@ -558,7 +558,7 @@ class Subscription {
         start_date,
         next_payment_date
       FROM subscriptions
-      WHERE active = 1
+      WHERE active = true
     `;
     
     db.all(query, [], (err, subscriptions) => {
@@ -647,7 +647,7 @@ class Subscription {
         currency,
         billing_cycle
       FROM subscriptions
-      WHERE active = 1 AND user_id = ?
+      WHERE active = true AND user_id = $1
     `;
     
     db.all(query, [userId], (err, rows) => {
@@ -661,7 +661,7 @@ class Subscription {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += row.monthly_amount;
+        totals[row.currency] += parseFloat(row.monthly_amount);
       });
       
       callback(null, { 
@@ -687,7 +687,7 @@ class Subscription {
         currency,
         billing_cycle
       FROM subscriptions
-      WHERE active = 1 AND user_id = ?
+      WHERE active = true AND user_id = $1
     `;
     
     db.all(query, [userId], (err, rows) => {
@@ -701,7 +701,7 @@ class Subscription {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += row.yearly_amount;
+        totals[row.currency] += parseFloat(row.yearly_amount);
       });
       
       callback(null, { 
@@ -741,7 +741,7 @@ class Subscription {
         SUM(${amountExpression}) as total_amount,
         currency
       FROM subscriptions
-      WHERE active = 1 AND user_id = ?
+      WHERE active = true AND user_id = $1
       GROUP BY category, currency
     `;
     
@@ -823,7 +823,7 @@ class Subscription {
             start_date,
             next_payment_date
           FROM subscriptions
-          WHERE active = 1 AND user_id = ?
+          WHERE active = true AND user_id = $1
         `;
         
         db.all(query, [userId], (err, subscriptions) => {
