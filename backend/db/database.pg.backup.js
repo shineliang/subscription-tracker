@@ -2,13 +2,13 @@ const { Pool } = require('pg');
 const path = require('path');
 require('dotenv').config();
 
-// 使用Supabase的PostgreSQL连接配置
+// PostgreSQL连接配置
 const pgConfig = {
-  host: process.env.SUPABASE_DB_HOST || 'db.cwmtexaliunqpyjnancf.supabase.co',
-  port: process.env.SUPABASE_DB_PORT || 5432,
-  database: process.env.SUPABASE_DB_NAME || 'postgres',
-  user: process.env.SUPABASE_DB_USER || 'postgres',
-  password: process.env.SUPABASE_DB_PASSWORD,
+  host: process.env.PG_HOST || '192.168.1.73',
+  port: process.env.PG_PORT || 5432,
+  database: process.env.PG_DATABASE || 'subscription_tracker',
+  user: process.env.PG_USER || 'subscription_app',
+  password: process.env.PG_PASSWORD || 'sub_app_2024',
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -106,10 +106,9 @@ module.exports = db;
 (async () => {
   try {
     const result = await pool.query('SELECT NOW() as current_time');
-    console.log('Supabase数据库连接成功:', result.rows[0].current_time);
+    console.log('PostgreSQL数据库连接成功:', result.rows[0].current_time);
   } catch (error) {
-    console.error('Supabase数据库连接失败:', error.message);
+    console.error('PostgreSQL数据库连接失败:', error.message);
     console.error('请检查数据库配置和网络连接');
-    console.error('确保在.env文件中设置了SUPABASE_DB_PASSWORD');
   }
 })();

@@ -1,14 +1,18 @@
+const { createClient } = require('@supabase/supabase-js');
 const { Pool } = require('pg');
-const path = require('path');
 require('dotenv').config();
 
-// 使用Supabase的PostgreSQL连接配置
+// Supabase配置
+const supabaseUrl = process.env.SUPABASE_URL || 'https://cwmtexaliunqpyjnancf.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3bXRleGFsaXVucXB5am5hbmNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQxMTg3NDEsImV4cCI6MjA2OTY5NDc0MX0.K_zAp8D5iooLl-bymczH41ctwBTe-M5yPcknwcoQ-RY';
+
+// PostgreSQL连接配置 - 使用Supabase的数据库连接
 const pgConfig = {
   host: process.env.SUPABASE_DB_HOST || 'db.cwmtexaliunqpyjnancf.supabase.co',
   port: process.env.SUPABASE_DB_PORT || 5432,
   database: process.env.SUPABASE_DB_NAME || 'postgres',
   user: process.env.SUPABASE_DB_USER || 'postgres',
-  password: process.env.SUPABASE_DB_PASSWORD,
+  password: process.env.SUPABASE_DB_PASSWORD, // 需要在.env中设置
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -20,6 +24,14 @@ const pool = new Pool(pgConfig);
 // 错误处理
 pool.on('error', (err, client) => {
   console.error('数据库连接池错误:', err);
+});
+
+// 创建Supabase客户端（用于认证和实时功能）
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
 });
 
 // 兼容旧的回调式API的数据库对象
@@ -99,17 +111,20 @@ const db = {
   }
 };
 
-// 导出数据库对象
-module.exports = db;
+// 导出数据库对象、连接池和Supabase客户端
+module.exports = {
+  db,
+  pool,
+  supabase
+};
 
 // 测试数据库连接
 (async () => {
   try {
     const result = await pool.query('SELECT NOW() as current_time');
-    console.log('Supabase数据库连接成功:', result.rows[0].current_time);
+    console.log('Supabase PostgreSQL数据库连接成功:', result.rows[0].current_time);
   } catch (error) {
-    console.error('Supabase数据库连接失败:', error.message);
+    console.error('Supabase PostgreSQL数据库连接失败:', error.message);
     console.error('请检查数据库配置和网络连接');
-    console.error('确保在.env文件中设置了SUPABASE_DB_PASSWORD');
   }
 })();
