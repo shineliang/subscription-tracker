@@ -16,7 +16,7 @@ import {
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import Loader from '../components/Loader';
-import { notificationAPI } from '../services/api';
+import { notificationAPI, dataAPI } from '../services/api';
 import axios from 'axios';
 
 const Settings = () => {
@@ -303,9 +303,7 @@ const Settings = () => {
               <button
                 onClick={async () => {
                   try {
-                    const response = await axios.get('/api/export-data', {
-                      responseType: 'blob'
-                    });
+                    const response = await dataAPI.exportData();
                     
                     // 创建下载链接
                     const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -342,14 +340,7 @@ const Settings = () => {
                     if (!file) return;
                     
                     try {
-                      const formData = new FormData();
-                      formData.append('file', file);
-                      
-                      const response = await axios.post('/api/import-data', formData, {
-                        headers: {
-                          'Content-Type': 'multipart/form-data'
-                        }
-                      });
+                      const response = await dataAPI.importData(file);
                       
                       toast.success(`导入完成：成功${response.data.success}条，失败${response.data.error}条`);
                       
