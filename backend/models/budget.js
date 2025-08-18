@@ -6,7 +6,7 @@ class Budget {
   static getAllByUser(userId, callback) {
     const query = `
       SELECT * FROM budgets 
-      WHERE user_id = ? AND is_active = true
+      WHERE user_id = $1 AND is_active = true
       ORDER BY type, period, category
     `;
     
@@ -22,7 +22,7 @@ class Budget {
   static getByIdAndUser(id, userId, callback) {
     const query = `
       SELECT * FROM budgets 
-      WHERE id = ? AND user_id = ?
+      WHERE id = $1 AND user_id = $2
     `;
     
     db.get(query, [id, userId], (err, row) => {
@@ -37,12 +37,12 @@ class Budget {
   static getByTypeAndPeriod(userId, type, period, category, callback) {
     let query = `
       SELECT * FROM budgets 
-      WHERE user_id = ? AND type = ? AND period = ? AND is_active = true
+      WHERE user_id = $1 AND type = $2 AND period = $3 AND is_active = true
     `;
     const params = [userId, type, period];
     
     if (type === 'category' && category) {
-      query += ' AND category = ?';
+      query += ' AND category = $4';
       params.push(category);
     }
     
@@ -73,7 +73,7 @@ class Budget {
       INSERT INTO budgets (
         user_id, name, type, period, amount, currency, 
         category, warning_threshold, start_date, end_date, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
     `;
     
     db.run(
@@ -114,10 +114,10 @@ class Budget {
 
     const query = `
       UPDATE budgets 
-      SET name = ?, amount = ?, currency = ?, warning_threshold = ?, 
-          is_active = ?, start_date = ?, end_date = ?, 
-          updated_at = NOW()
-      WHERE id = ? AND user_id = ?
+      SET name = $1, amount = $2, currency = $3, warning_threshold = $4, 
+          is_active = $5, start_date = $6, end_date = $7, 
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $8 AND user_id = $9
     `;
     
     db.run(
@@ -149,8 +149,8 @@ class Budget {
   static deleteByUser(id, userId, callback) {
     const query = `
       UPDATE budgets 
-      SET is_active = false, updated_at = NOW() 
-      WHERE id = ? AND user_id = ?
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = $1 AND user_id = $2
     `;
     
     db.run(query, [id, userId], function(err) {
@@ -191,7 +191,7 @@ class Budget {
         query = `
           SELECT amount, billing_cycle, currency
           FROM subscriptions
-          WHERE user_id = ? 
+          WHERE user_id = $1 
             AND active = true 
             AND cancelled_at IS NULL
             AND currency = ?
@@ -202,11 +202,11 @@ class Budget {
         query = `
           SELECT amount, billing_cycle, currency
           FROM subscriptions
-          WHERE user_id = ? 
+          WHERE user_id = $1 
             AND active = true 
             AND cancelled_at IS NULL
             AND currency = ?
-            AND category = ?
+            AND category = $2
         `;
         params = [userId, budget.currency, budget.category];
       }
@@ -337,7 +337,7 @@ class Budget {
           // 检查是否已存在相同的未读警告
           const checkQuery = `
             SELECT id FROM budget_alerts 
-            WHERE budget_id = ? AND user_id = ? AND alert_type = ? 
+            WHERE budget_id = $1 AND user_id = $2 AND alert_type = $3 
               AND is_read = false AND DATE(created_at) = CURRENT_DATE
           `;
           
@@ -347,7 +347,7 @@ class Budget {
             
             const insertQuery = `
               INSERT INTO budget_alerts (budget_id, user_id, alert_type, usage_percentage, message)
-              VALUES (?, ?, ?, ?, ?)
+              VALUES ($1, $2, $3, $4, $5)
             `;
             
             db.run(insertQuery, [
@@ -378,7 +378,7 @@ class Budget {
     // 先获取未读警告
     const alertQuery = `
       SELECT * FROM budget_alerts
-      WHERE user_id = ? AND is_read = false
+      WHERE user_id = $1 AND is_read = false
       ORDER BY created_at DESC
     `;
     
@@ -392,7 +392,7 @@ class Budget {
       const budgetIds = [...new Set(alerts.map(a => a.budget_id))];
       const promises = budgetIds.map(budgetId => {
         return new Promise((resolve) => {
-          const budgetQuery = `SELECT * FROM budgets WHERE id = ?`;
+          const budgetQuery = `SELECT * FROM budgets WHERE id = $1`;
           db.get(budgetQuery, [budgetId], (err, budget) => {
             resolve(budget || {});
           });
@@ -425,11 +425,11 @@ class Budget {
       return callback(null, { updated: 0 });
     }
     
-    const placeholders = alertIds.map((_, i) => `${i + 2}`).join(',');
+    const placeholders = alertIds.map((_, i) => `$${i + 2}`).join(',');
     const query = `
       UPDATE budget_alerts 
       SET is_read = true 
-      WHERE user_id = ? AND id IN (${placeholders})
+      WHERE user_id = $1 AND id IN (${placeholders})
     `;
     
     db.run(query, [userId, ...alertIds], function(err) {
@@ -448,7 +448,7 @@ class Budget {
           budget_id, user_id, period_start, period_end,
           budget_amount, spent_amount, remaining_amount,
           usage_percentage, exceeded
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `;
       
       db.run(query, [

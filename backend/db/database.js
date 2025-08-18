@@ -156,9 +156,17 @@ function parseSelectQuery(query, params) {
       let paramIndex = 0;
       
       conditions.forEach(condition => {
-        const match = condition.match(/(\w+)\s*=\s*\?/);
-        if (match) {
-          parsedQuery.filters[match[1]] = params[paramIndex++];
+        // 处理 PostgreSQL 参数占位符 $1, $2, etc.
+        const pgMatch = condition.match(/(\w+)\s*=\s*\$(\d+)/);
+        if (pgMatch) {
+          const paramNum = parseInt(pgMatch[2]) - 1;
+          parsedQuery.filters[pgMatch[1]] = params[paramNum];
+        } else {
+          // 兼容旧的 SQLite 格式
+          const match = condition.match(/(\w+)\s*=\s*\?/);
+          if (match) {
+            parsedQuery.filters[match[1]] = params[paramIndex++];
+          }
         }
       });
     }
@@ -175,11 +183,20 @@ async function executeRawSQL(query, params, type) {
   try {
     // 替换参数占位符
     let processedQuery = query;
-    params.forEach((param, index) => {
-      // 将 ? 替换为实际参数值，并正确处理字符串引号
-      const value = typeof param === 'string' ? `'${param}'` : param;
-      processedQuery = processedQuery.replace('?', value);
-    });
+    
+    // 处理 PostgreSQL 风格的参数 ($1, $2, etc.)
+    if (query.includes('$')) {
+      params.forEach((param, index) => {
+        const value = typeof param === 'string' ? `'${param}'` : param;
+        processedQuery = processedQuery.replace(new RegExp('\\$' + (index + 1), 'g'), value);
+      });
+    } else {
+      // 处理 SQLite 风格的参数 (?)
+      params.forEach((param) => {
+        const value = typeof param === 'string' ? `'${param}'` : param;
+        processedQuery = processedQuery.replace('?', value);
+      });
+    }
     
     console.log('执行原生SQL:', processedQuery);
     
@@ -325,11 +342,23 @@ async function executeInsert(query, params, callback) {
     const data = {};
     let paramIndex = 0;
     values.split(',').forEach((value, index) => {
-      if (value.trim() === '?') {
+      const trimmedValue = value.trim();
+      // 处理 PostgreSQL 参数占位符 $1, $2, etc.
+      if (trimmedValue.match(/^\$\d+$/)) {
+        const paramNum = parseInt(trimmedValue.substring(1)) - 1;
+        data[columnList[index]] = params[paramNum];
+      } else if (trimmedValue === '?') {
+        // 兼容旧的 SQLite 格式
         data[columnList[index]] = params[paramIndex++];
+      } else if (trimmedValue === 'true' || trimmedValue === 'false') {
+        // 处理布尔值
+        data[columnList[index]] = trimmedValue === 'true';
+      } else if (trimmedValue === 'CURRENT_TIMESTAMP' || trimmedValue === 'NOW()') {
+        // 处理时间戳
+        data[columnList[index]] = new Date().toISOString();
       } else {
-        // 处理直接值（如 NOW()）
-        data[columnList[index]] = value.trim().replace(/'/g, '');
+        // 处理直接值
+        data[columnList[index]] = trimmedValue.replace(/'/g, '');
       }
     });
     
@@ -371,8 +400,16 @@ async function executeUpdate(query, params, callback) {
     let paramIndex = 0;
     setClause.split(',').forEach(assignment => {
       const [column, value] = assignment.split('=').map(s => s.trim());
-      if (value === '?') {
+      // 处理 PostgreSQL 参数占位符
+      if (value.match(/^\$\d+$/)) {
+        const paramNum = parseInt(value.substring(1)) - 1;
+        data[column] = params[paramNum];
+      } else if (value === '?') {
         data[column] = params[paramIndex++];
+      } else if (value === 'CURRENT_TIMESTAMP' || value === 'NOW()') {
+        data[column] = new Date().toISOString();
+      } else if (value === 'true' || value === 'false') {
+        data[column] = value === 'true';
       } else {
         data[column] = value.replace(/'/g, '');
       }
@@ -381,8 +418,14 @@ async function executeUpdate(query, params, callback) {
     // 解析 WHERE 子句
     const filters = {};
     whereClause.split(/\s+AND\s+/i).forEach(condition => {
-      const [column, , value] = condition.split(/\s+/);
-      if (value === '?') {
+      const parts = condition.split(/\s+/);
+      const column = parts[0];
+      const value = parts[parts.length - 1];
+      
+      if (value.match(/^\$\d+$/)) {
+        const paramNum = parseInt(value.substring(1)) - 1;
+        filters[column] = params[paramNum];
+      } else if (value === '?') {
         filters[column] = params[paramIndex++];
       } else {
         filters[column] = value.replace(/'/g, '');
@@ -426,8 +469,14 @@ async function executeDelete(query, params, callback) {
     const filters = {};
     let paramIndex = 0;
     whereClause.split(/\s+AND\s+/i).forEach(condition => {
-      const [column, , value] = condition.split(/\s+/);
-      if (value === '?') {
+      const parts = condition.split(/\s+/);
+      const column = parts[0];
+      const value = parts[parts.length - 1];
+      
+      if (value.match(/^\$\d+$/)) {
+        const paramNum = parseInt(value.substring(1)) - 1;
+        filters[column] = params[paramNum];
+      } else if (value === '?') {
         filters[column] = params[paramIndex++];
       } else {
         filters[column] = value.replace(/'/g, '');
