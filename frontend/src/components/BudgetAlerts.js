@@ -7,15 +7,17 @@ import { Link } from 'react-router-dom';
 const BudgetAlerts = () => {
   const [alerts, setAlerts] = useState([]);
   const [visible, setVisible] = useState(true);
+  const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
     fetchAlerts();
-    checkAndCreateAlerts();
+    // 只在组件首次加载时检查一次
+    // checkAndCreateAlerts(); // 暂时禁用自动创建，避免重复
     
-    // 定期检查预算警告（每小时）
+    // 定期获取警告（每30秒），但不创建新的
     const interval = setInterval(() => {
-      checkAndCreateAlerts();
-    }, 60 * 60 * 1000);
+      fetchAlerts();
+    }, 30 * 1000);
     
     return () => clearInterval(interval);
   }, []);
@@ -23,47 +25,70 @@ const BudgetAlerts = () => {
   const fetchAlerts = async () => {
     try {
       const response = await budgetAPI.getUnreadAlerts();
-      setAlerts(response.data);
+      // 确保没有重复的alerts（基于id去重）
+      const uniqueAlerts = response.data ? 
+        Array.from(new Map(response.data.map(alert => [alert.id, alert])).values()) : 
+        [];
+      setAlerts(uniqueAlerts);
     } catch (error) {
       console.error('获取预算警告失败:', error);
+      // 如果获取失败，清空警告避免显示过时数据
+      setAlerts([]);
     }
   };
 
   const checkAndCreateAlerts = async () => {
+    if (isChecking) return; // 防止重复调用
+    
+    setIsChecking(true);
     try {
       await budgetAPI.checkAlerts();
-      fetchAlerts();
+      await fetchAlerts();
     } catch (error) {
       console.error('检查预算警告失败:', error);
+    } finally {
+      setIsChecking(false);
     }
   };
 
   const handleDismiss = async (alertId) => {
     try {
+      // 立即从UI中移除，提供更好的用户体验
+      setAlerts(prevAlerts => prevAlerts.filter(alert => alert.id !== alertId));
+      
+      // 然后调用API标记为已读
       await budgetAPI.markAlertsAsRead([alertId]);
-      setAlerts(alerts.filter(alert => alert.id !== alertId));
     } catch (error) {
       console.error('标记警告为已读失败:', error);
+      // 如果失败，重新获取警告列表
+      fetchAlerts();
     }
   };
 
   const handleDismissAll = async () => {
     try {
       const alertIds = alerts.map(alert => alert.id);
-      await budgetAPI.markAlertsAsRead(alertIds);
+      // 立即清空UI
       setAlerts([]);
+      
+      // 然后调用API
+      if (alertIds.length > 0) {
+        await budgetAPI.markAlertsAsRead(alertIds);
+      }
     } catch (error) {
       console.error('标记所有警告为已读失败:', error);
+      // 如果失败，重新获取
+      fetchAlerts();
     }
   };
 
-  if (!visible || alerts.length === 0) {
+  if (!visible || !alerts || alerts.length === 0) {
     return null;
   }
 
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-      <AnimatePresence>
+      <AnimatePresence mode="popLayout">
         {alerts.map((alert, index) => (
           <motion.div
             key={alert.id}

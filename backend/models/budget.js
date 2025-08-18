@@ -153,14 +153,35 @@ class Budget {
       WHERE id = $1 AND user_id = $2
     `;
     
+    console.log('删除预算:', { id, userId });
+    
     db.run(query, [id, userId], function(err) {
       if (err) {
+        console.error('删除预算错误:', err);
         return callback(err, null);
       }
+      
+      console.log('删除结果:', { changes: this.changes });
+      
       if (this.changes === 0) {
         return callback(new Error('预算不存在或无权限'), null);
       }
-      callback(null, { id, deleted: true });
+      
+      // 同时标记相关的未读警告为已读，避免继续显示
+      const markAlertsQuery = `
+        UPDATE budget_alerts 
+        SET is_read = true 
+        WHERE budget_id = $1 AND user_id = $2 AND is_read = false
+      `;
+      
+      db.run(markAlertsQuery, [id, userId], function(alertErr) {
+        if (alertErr) {
+          console.error('标记预算警告为已读失败:', alertErr);
+        } else {
+          console.log('标记预算警告为已读:', { changes: this.changes });
+        }
+        callback(null, { id, deleted: true });
+      });
     });
   }
 
@@ -392,27 +413,30 @@ class Budget {
       const budgetIds = [...new Set(alerts.map(a => a.budget_id))];
       const promises = budgetIds.map(budgetId => {
         return new Promise((resolve) => {
-          const budgetQuery = `SELECT * FROM budgets WHERE id = $1`;
+          // 只获取激活的预算
+          const budgetQuery = `SELECT * FROM budgets WHERE id = $1 AND is_active = true`;
           db.get(budgetQuery, [budgetId], (err, budget) => {
-            resolve(budget || {});
+            resolve(budget || null);
           });
         });
       });
       
       Promise.all(promises).then(budgets => {
         const budgetMap = budgets.reduce((map, b) => {
-          if (b.id) map[b.id] = b;
+          if (b && b.id) map[b.id] = b;
           return map;
         }, {});
         
-        // 合并数据
-        const enrichedAlerts = alerts.map(alert => ({
-          ...alert,
-          budget_name: budgetMap[alert.budget_id]?.name || '',
-          type: budgetMap[alert.budget_id]?.type || '',
-          period: budgetMap[alert.budget_id]?.period || '',
-          category: budgetMap[alert.budget_id]?.category || ''
-        }));
+        // 只返回有对应激活预算的警告
+        const enrichedAlerts = alerts
+          .filter(alert => budgetMap[alert.budget_id]) // 过滤掉没有对应激活预算的警告
+          .map(alert => ({
+            ...alert,
+            budget_name: budgetMap[alert.budget_id]?.name || '',
+            type: budgetMap[alert.budget_id]?.type || '',
+            period: budgetMap[alert.budget_id]?.period || '',
+            category: budgetMap[alert.budget_id]?.category || ''
+          }));
         
         callback(null, enrichedAlerts);
       });

@@ -163,9 +163,27 @@ function parseSelectQuery(query, params) {
           parsedQuery.filters[pgMatch[1]] = params[paramNum];
         } else {
           // 兼容旧的 SQLite 格式
-          const match = condition.match(/(\w+)\s*=\s*\?/);
-          if (match) {
-            parsedQuery.filters[match[1]] = params[paramIndex++];
+          const sqliteMatch = condition.match(/(\w+)\s*=\s*\?/);
+          if (sqliteMatch) {
+            parsedQuery.filters[sqliteMatch[1]] = params[paramIndex++];
+          } else {
+            // 处理直接值（如 true, false, 数字等）
+            const literalMatch = condition.match(/(\w+)\s*=\s*(\w+|'[^']*')/);
+            if (literalMatch) {
+              let value = literalMatch[2];
+              // 处理布尔值
+              if (value === 'true') value = true;
+              else if (value === 'false') value = false;
+              // 处理字符串（去掉引号）
+              else if (value.startsWith("'") && value.endsWith("'")) {
+                value = value.slice(1, -1);
+              }
+              // 处理数字
+              else if (!isNaN(value)) {
+                value = Number(value);
+              }
+              parsedQuery.filters[literalMatch[1]] = value;
+            }
           }
         }
       });
@@ -388,6 +406,9 @@ async function executeUpdate(query, params, callback) {
   try {
     // 解析 UPDATE 语句，使用 . 匹配换行符
     const normalizedQuery = query.replace(/\s+/g, ' ').trim();
+    console.log('UPDATE SQL:', normalizedQuery);
+    console.log('UPDATE params:', params);
+    
     const match = normalizedQuery.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)/i);
     if (!match) {
       throw new Error('Invalid UPDATE query');
@@ -432,19 +453,35 @@ async function executeUpdate(query, params, callback) {
       }
     });
     
+    console.log('UPDATE table:', table);
+    console.log('UPDATE data:', data);
+    console.log('UPDATE filters:', filters);
+    
     // 执行 Supabase 更新
     let updateQuery = supabase.from(table).update(data);
     Object.entries(filters).forEach(([key, value]) => {
       updateQuery = updateQuery.eq(key, value);
     });
     
-    const { data: result, error } = await updateQuery.select();
+    // 使用 count 选项来获取更新的行数
+    const { data: result, error, count } = await updateQuery.select('*', { count: 'exact' });
     
-    if (error) throw error;
+    if (error) {
+      // 如果是没有找到要更新的行，不算错误
+      if (error.code === 'PGRST116') {
+        const thisObj = {
+          lastID: null,
+          changes: 0
+        };
+        if (callback) callback.call(thisObj, null);
+        return;
+      }
+      throw error;
+    }
     
     const thisObj = {
       lastID: null,
-      changes: result ? result.length : 0
+      changes: count !== null ? count : (result ? result.length : 0)
     };
     
     if (callback) callback.call(thisObj, null);
