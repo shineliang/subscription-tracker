@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { PlusIcon } from '@heroicons/react/24/outline';
 
 const EmptyState = ({ title, description, icon, actionLink, actionText }) => {
+  const IconComponent = icon;
+  
   return (
     <div className="text-center py-12 px-6 bg-white dark:bg-dark-700 rounded-lg shadow border border-gray-100 dark:border-dark-600">
       <div className="mx-auto h-24 w-24 rounded-full bg-primary-50 dark:bg-dark-600 flex items-center justify-center">
-        {icon}
+        {IconComponent && <IconComponent className="h-12 w-12 text-primary-600 dark:text-primary-400" />}
       </div>
       <h3 className="mt-6 text-xl font-medium text-dark-600 dark:text-white">{title}</h3>
       <p className="mt-2 text-gray-500 dark:text-gray-400">{description}</p>

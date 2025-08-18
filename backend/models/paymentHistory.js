@@ -54,31 +54,129 @@ class PaymentHistory {
   
   // 获取指定时间段的付款历史
   static getByDateRange(userId, startDate, endDate, callback) {
-    const query = `
-      SELECT ph.*, s.name as subscription_name, s.provider, s.category
-      FROM payment_history ph
-      JOIN subscriptions s ON ph.subscription_id = s.id
-      WHERE ph.user_id = ? AND ph.payment_date BETWEEN ? AND ?
-      ORDER BY ph.payment_date DESC
+    // 先获取付款历史记录
+    const paymentQuery = `
+      SELECT * FROM payment_history
+      WHERE user_id = ?
+      ORDER BY payment_date DESC
     `;
     
-    db.all(query, [userId, startDate, endDate], callback);
+    db.all(paymentQuery, [userId], (err, payments) => {
+      if (err) {
+        return callback(err, null);
+      }
+      
+      // 过滤日期范围并获取订阅信息
+      const filteredPayments = payments.filter(payment => {
+        if (!payment.payment_date) return false;
+        const paymentDate = payment.payment_date;
+        return paymentDate >= startDate && paymentDate <= endDate;
+      });
+      
+      if (filteredPayments.length === 0) {
+        return callback(null, []);
+      }
+      
+      // 获取相关的订阅信息
+      const subscriptionIds = [...new Set(filteredPayments.map(p => p.subscription_id))];
+      
+      if (subscriptionIds.length === 0) {
+        return callback(null, filteredPayments);
+      }
+      
+      // 为了简化，我们单独查询订阅信息
+      const subscriptionQuery = `
+        SELECT id, name, provider, category
+        FROM subscriptions
+        WHERE user_id = ?
+      `;
+      
+      db.all(subscriptionQuery, [userId], (subErr, subscriptions) => {
+        if (subErr) {
+          // 如果订阅查询失败，返回基础付款信息
+          return callback(null, filteredPayments);
+        }
+        
+        // 创建订阅映射
+        const subscriptionMap = {};
+        subscriptions.forEach(sub => {
+          subscriptionMap[sub.id] = sub;
+        });
+        
+        // 合并付款和订阅信息
+        const enrichedPayments = filteredPayments.map(payment => {
+          const subscription = subscriptionMap[payment.subscription_id];
+          return {
+            ...payment,
+            subscription_name: subscription ? subscription.name : '未知订阅',
+            provider: subscription ? subscription.provider : '',
+            category: subscription ? subscription.category : ''
+          };
+        });
+        
+        callback(null, enrichedPayments);
+      });
+    });
   }
   
   // 获取付款统计
   static getPaymentStats(userId, year, callback) {
+    // 使用简化查询，在应用层进行计算
     const query = `
       SELECT 
-        strftime('%m', payment_date) as month,
-        COUNT(*) as payment_count,
-        SUM(CASE WHEN currency = 'CNY' THEN amount ELSE amount * 7 END) as total_amount
+        payment_date,
+        amount,
+        currency
       FROM payment_history
-      WHERE user_id = ? AND TO_CHAR(payment_date, 'YYYY') = ?
-      GROUP BY month
-      ORDER BY month
+      WHERE user_id = ?
     `;
     
-    db.all(query, [userId, String(year)], callback);
+    db.all(query, [userId], (err, rows) => {
+      if (err) {
+        return callback(err, null);
+      }
+      
+      // 在 JavaScript 中进行分组和统计
+      const monthStats = {};
+      const targetYear = String(year);
+      
+      rows.forEach(row => {
+        if (!row.payment_date) return;
+        
+        // 解析日期并检查年份
+        const paymentDate = new Date(row.payment_date);
+        const paymentYear = paymentDate.getFullYear().toString();
+        
+        if (paymentYear === targetYear) {
+          const month = (paymentDate.getMonth() + 1).toString().padStart(2, '0');
+          
+          if (!monthStats[month]) {
+            monthStats[month] = {
+              month: month,
+              payment_count: 0,
+              total_amount: 0
+            };
+          }
+          
+          monthStats[month].payment_count++;
+          
+          // 转换金额（非CNY货币简单乘以7）
+          const amount = parseFloat(row.amount) || 0;
+          const convertedAmount = row.currency === 'CNY' ? amount : amount * 7;
+          monthStats[month].total_amount += convertedAmount;
+        }
+      });
+      
+      // 转换为数组并排序
+      const result = Object.values(monthStats).sort((a, b) => a.month.localeCompare(b.month));
+      
+      // 确保total_amount保留两位小数
+      result.forEach(stat => {
+        stat.total_amount = Math.round(stat.total_amount * 100) / 100;
+      });
+      
+      callback(null, result);
+    });
   }
   
   // 获取最近的付款记录

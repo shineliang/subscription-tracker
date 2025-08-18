@@ -144,9 +144,9 @@ const Button = forwardRef(({
       
       {/* Button content */}
       <span className={cn("relative z-10 flex items-center gap-2", loading && "opacity-0")}>
-        {icon && iconPosition === 'left' && <span className="w-5 h-5">{icon}</span>}
+        {icon && iconPosition === 'left' && icon}
         {children}
-        {icon && iconPosition === 'right' && <span className="w-5 h-5">{icon}</span>}
+        {icon && iconPosition === 'right' && icon}
       </span>
       
       {/* Hover shine effect */}

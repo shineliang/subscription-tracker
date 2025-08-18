@@ -79,6 +79,30 @@ const Settings = () => {
         browser_notifications: settings.browser_notifications ? 1 : 0,
       });
       
+      // 如果邮箱发生变化，更新本地存储的用户信息
+      if (settings.email) {
+        const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (userStr) {
+          try {
+            const user = JSON.parse(userStr);
+            const updatedUser = { ...user, email: settings.email };
+            
+            // 更新localStorage和sessionStorage
+            if (localStorage.getItem('user')) {
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+            if (sessionStorage.getItem('user')) {
+              sessionStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+            
+            // 触发用户信息更新事件
+            window.dispatchEvent(new CustomEvent('userUpdated'));
+          } catch (e) {
+            console.error('更新本地用户信息失败:', e);
+          }
+        }
+      }
+      
       toast.success('设置已保存');
     } catch (error) {
       console.error('Error saving settings:', error);

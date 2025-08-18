@@ -162,3 +162,5 @@ const ComponentName = () => {
 - SQLite database file (`subscription_tracker.db`) created in backend directory
 - Ensure proper file permissions for database writes
 - Configure CORS settings for production domain
+- 记住数据库使用的是supabase
+- 启动前端和后端服务时，请把日志保存到日志文件中， 方便我查看日志

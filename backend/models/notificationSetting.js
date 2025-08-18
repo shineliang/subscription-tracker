@@ -39,8 +39,8 @@ class NotificationSetting {
       user_id: userId,
       email: '',
       notify_days_before: 7,
-      email_notifications: 0,
-      browser_notifications: 1
+      email_notifications: true,
+      browser_notifications: true
     };
 
     const query = `
@@ -104,18 +104,17 @@ class NotificationSetting {
           SET email = ?,
               notify_days_before = ?,
               email_notifications = ?,
-              browser_notifications = ?,
-              updated_at = NOW()
+              browser_notifications = ?
           WHERE user_id = ?
         `;
         
         db.run(
           query,
           [
-            email,
-            notify_days_before,
-            email_notifications,
-            browser_notifications,
+            email !== undefined ? email : existingSettings.email,
+            notify_days_before !== undefined ? notify_days_before : existingSettings.notify_days_before,
+            email_notifications !== undefined ? email_notifications : existingSettings.email_notifications,
+            browser_notifications !== undefined ? browser_notifications : existingSettings.browser_notifications,
             userId
           ],
           function(err) {
@@ -125,10 +124,10 @@ class NotificationSetting {
             callback(null, { 
               id: existingSettings.id,
               user_id: userId,
-              email, 
-              notify_days_before, 
-              email_notifications, 
-              browser_notifications 
+              email: email !== undefined ? email : existingSettings.email,
+              notify_days_before: notify_days_before !== undefined ? notify_days_before : existingSettings.notify_days_before,
+              email_notifications: email_notifications !== undefined ? email_notifications : existingSettings.email_notifications,
+              browser_notifications: browser_notifications !== undefined ? browser_notifications : existingSettings.browser_notifications
             });
           }
         );
@@ -144,13 +143,12 @@ class NotificationSetting {
   // 获取所有启用邮件通知的用户
   static getAllWithEmailEnabled(callback) {
     const query = `
-      SELECT ns.*, u.username, u.full_name
+      SELECT ns.*, u.username, u.email as user_email
       FROM notification_settings ns
       JOIN users u ON ns.user_id = u.id
       WHERE ns.email_notifications = true 
-      AND ns.email IS NOT NULL 
-      AND ns.email != ''
-      AND u.is_active = true
+      AND u.email IS NOT NULL 
+      AND u.email != ''
     `;
     
     db.all(query, [], (err, rows) => {

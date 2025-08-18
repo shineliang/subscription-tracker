@@ -182,23 +182,14 @@ class Budget {
         periodEnd = now.clone().endOf('year').format('YYYY-MM-DD');
       }
 
-      // 查询该周期内的支出
+      // 使用简化查询，在应用层进行计算
       let query;
       let params;
 
       if (budget.type === 'total') {
-        // 总预算：计算所有订阅的支出
+        // 总预算：获取所有订阅
         query = `
-          SELECT 
-            SUM(CASE
-              WHEN billing_cycle = 'monthly' THEN amount
-              WHEN billing_cycle = 'yearly' THEN amount / 12
-              WHEN billing_cycle = 'half_yearly' THEN amount / 6
-              WHEN billing_cycle = 'quarterly' THEN amount / 3
-              WHEN billing_cycle = 'weekly' THEN amount * 4.33
-              WHEN billing_cycle = 'daily' THEN amount * 30.44
-              ELSE amount
-            END) as spent_amount
+          SELECT amount, billing_cycle, currency
           FROM subscriptions
           WHERE user_id = ? 
             AND active = true 
@@ -207,18 +198,9 @@ class Budget {
         `;
         params = [userId, budget.currency];
       } else {
-        // 分类预算：只计算特定类别的支出
+        // 分类预算：获取特定类别的订阅
         query = `
-          SELECT 
-            SUM(CASE
-              WHEN billing_cycle = 'monthly' THEN amount
-              WHEN billing_cycle = 'yearly' THEN amount / 12
-              WHEN billing_cycle = 'half_yearly' THEN amount / 6
-              WHEN billing_cycle = 'quarterly' THEN amount / 3
-              WHEN billing_cycle = 'weekly' THEN amount * 4.33
-              WHEN billing_cycle = 'daily' THEN amount * 30.44
-              ELSE amount
-            END) as spent_amount
+          SELECT amount, billing_cycle, currency
           FROM subscriptions
           WHERE user_id = ? 
             AND active = true 
@@ -229,18 +211,42 @@ class Budget {
         params = [userId, budget.currency, budget.category];
       }
 
-      // 如果是年度预算，需要乘以12
-      if (budget.period === 'yearly') {
-        query = query.replace(
-          'END) as spent_amount',
-          'END) * 12 as spent_amount'
-        );
-      }
-
-      db.get(query, params, (err, result) => {
+      db.all(query, params, (err, subscriptions) => {
         if (err) return callback(err);
 
-        const spentAmount = result.spent_amount || 0;
+        // 在 JavaScript 中计算支出金额
+        let spentAmount = 0;
+
+        subscriptions.forEach(sub => {
+          let amount = parseFloat(sub.amount) || 0;
+
+          // 根据预算周期调整计算方式
+          if (budget.period === 'monthly') {
+            // 月度预算：转换为月度金额
+            switch (sub.billing_cycle) {
+              case 'yearly': amount = amount / 12; break;
+              case 'half_yearly': amount = amount / 6; break;
+              case 'quarterly': amount = amount / 3; break;
+              case 'weekly': amount = amount * 4.33; break;
+              case 'daily': amount = amount * 30.44; break;
+              default: break; // monthly or default
+            }
+          } else if (budget.period === 'yearly') {
+            // 年度预算：转换为年度金额
+            switch (sub.billing_cycle) {
+              case 'monthly': amount = amount * 12; break;
+              case 'half_yearly': amount = amount * 2; break;
+              case 'quarterly': amount = amount * 4; break;
+              case 'weekly': amount = amount * 52; break;
+              case 'daily': amount = amount * 365; break;
+              default: break; // yearly or default
+            }
+          }
+
+          spentAmount += amount;
+        });
+
+        spentAmount = Math.round(spentAmount * 100) / 100; // 保留两位小数
         const remainingAmount = budget.amount - spentAmount;
         const usagePercentage = budget.amount > 0 ? 
           (spentAmount / budget.amount * 100).toFixed(2) : 0;

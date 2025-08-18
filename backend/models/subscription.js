@@ -735,43 +735,78 @@ class Subscription {
 
   // 按类别分组统计用户的支出
   static getSpendingByCategoryByUser(userId, timeframe = 'monthly', callback) {
-    // 根据时间范围选择合适的计算方法
-    const amountExpression = timeframe === 'monthly' ? 
-      `CASE
-        WHEN billing_cycle = 'monthly' THEN amount
-        WHEN billing_cycle = 'yearly' THEN amount / 12
-        WHEN billing_cycle = 'half_yearly' THEN amount / 6
-        WHEN billing_cycle = 'quarterly' THEN amount / 3
-        WHEN billing_cycle = 'weekly' THEN amount * 4.33
-        WHEN billing_cycle = 'daily' THEN amount * 30.44
-        ELSE amount
-      END` : 
-      `CASE
-        WHEN billing_cycle = 'monthly' THEN amount * 12
-        WHEN billing_cycle = 'yearly' THEN amount
-        WHEN billing_cycle = 'half_yearly' THEN amount * 2
-        WHEN billing_cycle = 'quarterly' THEN amount * 4
-        WHEN billing_cycle = 'weekly' THEN amount * 52
-        WHEN billing_cycle = 'daily' THEN amount * 365
-        ELSE amount
-      END`;
-    
+    // 使用简化查询，在应用层计算复杂逻辑
     const query = `
       SELECT 
         category,
-        COUNT(*) as subscription_count,
-        SUM(${amountExpression}) as total_amount,
-        currency
+        amount,
+        currency,
+        billing_cycle
       FROM subscriptions
       WHERE active = true AND user_id = ?
-      GROUP BY category, currency
+      AND cancelled_at IS NULL
     `;
     
     db.all(query, [userId], (err, rows) => {
       if (err) {
         return callback(err, null);
       }
-      callback(null, rows);
+      
+      // 在 JavaScript 中进行分组和计算
+      const categoryStats = {};
+      
+      rows.forEach(row => {
+        const category = row.category || '未分类';
+        const currency = row.currency || 'CNY';
+        const key = `${category}_${currency}`;
+        
+        if (!categoryStats[key]) {
+          categoryStats[key] = {
+            category: category,
+            currency: currency,
+            subscription_count: 0,
+            total_amount: 0
+          };
+        }
+        
+        // 根据时间范围计算金额
+        let amount = parseFloat(row.amount) || 0;
+        
+        if (timeframe === 'monthly') {
+          // 转换为月度金额
+          switch (row.billing_cycle) {
+            case 'yearly': amount = amount / 12; break;
+            case 'half_yearly': amount = amount / 6; break;
+            case 'quarterly': amount = amount / 3; break;
+            case 'weekly': amount = amount * 4.33; break;
+            case 'daily': amount = amount * 30.44; break;
+            default: break; // monthly or default
+          }
+        } else {
+          // 转换为年度金额
+          switch (row.billing_cycle) {
+            case 'monthly': amount = amount * 12; break;
+            case 'half_yearly': amount = amount * 2; break;
+            case 'quarterly': amount = amount * 4; break;
+            case 'weekly': amount = amount * 52; break;
+            case 'daily': amount = amount * 365; break;
+            default: break; // yearly or default
+          }
+        }
+        
+        categoryStats[key].subscription_count++;
+        categoryStats[key].total_amount += amount;
+      });
+      
+      // 转换为数组格式
+      const result = Object.values(categoryStats).map(stat => ({
+        category: stat.category,
+        subscription_count: stat.subscription_count,
+        total_amount: Math.round(stat.total_amount * 100) / 100, // 保留两位小数
+        currency: stat.currency
+      }));
+      
+      callback(null, result);
     });
   }
 

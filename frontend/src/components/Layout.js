@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { 
   HomeIcon, 
@@ -22,6 +22,7 @@ import BudgetAlerts from './BudgetAlerts';
 
 const Layout = ({ darkMode, setDarkMode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [user, setUser] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -70,7 +71,31 @@ const Layout = ({ darkMode, setDarkMode }) => {
     return null;
   };
   
-  const user = getUserInfo();
+  // 初始化用户信息并监听storage变化
+  useEffect(() => {
+    // 初始加载用户信息
+    setUser(getUserInfo());
+    
+    // 监听storage变化
+    const handleStorageChange = (e) => {
+      if (e.key === 'user') {
+        setUser(getUserInfo());
+      }
+    };
+    
+    // 监听自定义事件（用于同一tab内的更新）
+    const handleUserUpdate = () => {
+      setUser(getUserInfo());
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userUpdated', handleUserUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userUpdated', handleUserUpdate);
+    };
+  }, []);
   
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-dark-800 transition-colors duration-300">

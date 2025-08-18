@@ -494,8 +494,8 @@ router.post('/parse-subscription', authenticateToken, async (req, res) => {
     }
     
     // 获取当前日期和准备Claude API格式的消息
-    const currentDate = getCurrentFormattedDate();
-    const systemMessage = `您是一个专门解析软件订阅信息的助手。The current date is ${currentDate}. 请从用户的描述中提取以下信息：服务名称、提供商、金额、货币、计费周期（月/年/季度等）、开始日期。以JSON格式返回。`;
+    const aiCurrentDate = getCurrentFormattedDate();
+    const systemMessage = `您是一个专门解析软件订阅信息的助手。The current date is ${aiCurrentDate}. 请从用户的描述中提取以下信息：服务名称、提供商、金额、货币、计费周期（月/年/季度等）、开始日期。以JSON格式返回。`;
     
     const response = await axios.post(
       process.env.OPENAI_API_BASE || 'http://154.40.34.179:3000/api/v1/messages',
@@ -1468,7 +1468,7 @@ router.get('/analysis/trend-report', authenticateToken, (req, res) => {
       }
       
       const categoryTrends = {};
-      const currentDate = moment();
+      const currentMoment = moment();
       
       subscriptions.forEach(sub => {
         const category = sub.category || '未分类';
@@ -1491,7 +1491,7 @@ router.get('/analysis/trend-report', authenticateToken, (req, res) => {
         }
         
         // 判断是否为新订阅（3个月内）
-        const isNew = moment(sub.created_at).isAfter(currentDate.clone().subtract(3, 'months'));
+        const isNew = moment(sub.created_at).isAfter(currentMoment.clone().subtract(3, 'months'));
         
         categoryTrends[category].current += monthlyAmount;
         if (!isNew) {

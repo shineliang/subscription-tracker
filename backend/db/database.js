@@ -357,8 +357,9 @@ async function executeInsert(query, params, callback) {
 // 执行 UPDATE 操作
 async function executeUpdate(query, params, callback) {
   try {
-    // 解析 UPDATE 语句
-    const match = query.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)/i);
+    // 解析 UPDATE 语句，使用 . 匹配换行符
+    const normalizedQuery = query.replace(/\s+/g, ' ').trim();
+    const match = normalizedQuery.match(/UPDATE\s+(\w+)\s+SET\s+(.+?)\s+WHERE\s+(.+)/i);
     if (!match) {
       throw new Error('Invalid UPDATE query');
     }

@@ -121,10 +121,10 @@ const validateNotificationSettings = (req, res, next) => {
     req.body.notify_days_before = parseInt(notify_days_before);
   }
   if (email_notifications !== undefined) {
-    req.body.email_notifications = email_notifications ? 1 : 0;
+    req.body.email_notifications = Boolean(email_notifications);
   }
   if (browser_notifications !== undefined) {
-    req.body.browser_notifications = browser_notifications ? 1 : 0;
+    req.body.browser_notifications = Boolean(browser_notifications);
   }
   
   next();

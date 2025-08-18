@@ -66,8 +66,8 @@ const StatCard = ({ title, value, icon, color, footer, trend, trendDirection = '
             whileHover={{ scale: 1.1, rotate: 5 }}
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            <div className={`p-3 rounded-2xl bg-gradient-to-br ${gradientClass} shadow-lg`}>
-              {icon && <span className="text-white block">{icon}</span>}
+            <div className={`p-3 rounded-2xl bg-gradient-to-br ${gradientClass} shadow-lg text-white`}>
+              {icon}
             </div>
             {/* Icon glow effect */}
             <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${gradientClass} blur-xl opacity-40`} />
