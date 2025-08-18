@@ -493,22 +493,27 @@ router.post('/parse-subscription', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: '请提供描述信息' });
     }
     
-    // 获取当前日期
+    // 获取当前日期和准备Claude API格式的消息
     const currentDate = getCurrentFormattedDate();
-    
-    // 使用createMessages函数生成包含当前日期的消息
-    const messages = createMessages(description);
+    const systemMessage = `您是一个专门解析软件订阅信息的助手。The current date is ${currentDate}. 请从用户的描述中提取以下信息：服务名称、提供商、金额、货币、计费周期（月/年/季度等）、开始日期。以JSON格式返回。`;
     
     const response = await axios.post(
-      process.env.OPENAI_API_BASE || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+      process.env.OPENAI_API_BASE || 'http://154.40.34.179:3000/api/v1/messages',
       {
-        model: process.env.OPENAI_API_MODEL || "qwen-max-latest",
-        messages: messages,
-        functions: [
+        model: process.env.OPENAI_API_MODEL || "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        system: systemMessage,
+        messages: [
+          {
+            role: "user",
+            content: description
+          }
+        ],
+        tools: [
           {
             name: "extract_subscription_info",
             description: "从用户描述中提取订阅信息",
-            parameters: {
+            input_schema: {
               type: "object",
               properties: {
                 name: {
@@ -528,8 +533,8 @@ router.post('/parse-subscription', authenticateToken, async (req, res) => {
                   description: "货币单位，默认CNY"
                 },
                 billing_cycle: {
-                type: "string",
-                description: "计费周期: monthly, half_yearly, yearly, quarterly, weekly, daily"
+                  type: "string",
+                  description: "计费周期: monthly, half_yearly, yearly, quarterly, weekly, daily"
                 },
                 start_date: {
                   type: "string",
@@ -548,7 +553,7 @@ router.post('/parse-subscription', authenticateToken, async (req, res) => {
             }
           }
         ],
-        function_call: { name: "extract_subscription_info" }
+        tool_choice: { type: "tool", name: "extract_subscription_info" }
       }, {
         headers: {
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -556,8 +561,9 @@ router.post('/parse-subscription', authenticateToken, async (req, res) => {
         }
       });
     
-    const functionCall = response.data.choices[0].message.function_call;
-    const parsedInfo = JSON.parse(functionCall.arguments);
+    // Claude API 响应格式
+    const toolUse = response.data.content.find(item => item.type === 'tool_use');
+    const parsedInfo = toolUse.input;
     console.log('LLM原始解析结果:', parsedInfo);
     
     // 使用计算函数处理数据，完善信息并计算next_payment_date
@@ -987,13 +993,22 @@ router.get('/budgets-usage', authenticateToken, (req, res) => {
   });
 });
 
-// 检查并创建预算警告
+// 检查并创建预算警告 (支持 GET 和 POST)
+router.get('/budgets/check-alerts', authenticateToken, (req, res) => {
+  Budget.checkAndCreateAlerts(req.user.id, (err, alerts) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(alerts || []);
+  });
+});
+
 router.post('/budgets/check-alerts', authenticateToken, (req, res) => {
   Budget.checkAndCreateAlerts(req.user.id, (err, alerts) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    res.json(alerts);
+    res.json(alerts || []);
   });
 });
 

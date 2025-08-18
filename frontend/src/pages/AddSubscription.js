@@ -178,12 +178,12 @@ const AddSubscription = () => {
   };
   
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-dark-600 dark:text-white mb-6">添加新订阅</h1>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h1 className="text-3xl font-bold text-dark-600 dark:text-white mb-8">添加新订阅</h1>
       
       {/* AI解析模块 */}
       <motion.div 
-        className="bg-white dark:bg-dark-700 rounded-lg shadow-md p-6 mb-8 border border-gray-100 dark:border-dark-600"
+        className="bg-white dark:bg-dark-700 rounded-xl shadow-lg p-6 sm:p-8 mb-8 border border-gray-100 dark:border-dark-600"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -193,82 +193,111 @@ const AddSubscription = () => {
           <h2 className="text-lg font-semibold text-dark-600 dark:text-white">AI 快速添加</h2>
         </div>
         
-        <p className="text-gray-600 dark:text-gray-300 mb-4">
+        <p className="text-gray-600 dark:text-gray-300 mb-6">
           描述您的订阅，AI将自动为您填写表单。例如：<br />
           "我每月支付Netflix会员89元，从今天开始" 或 "我订阅了Adobe年费888元，刚刚付款"
         </p>
         
-        <div className="flex space-x-3">
-          <div className="flex-1">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3">
             <textarea
-              className="form-input h-24 resize-none"
-              placeholder="描述您的订阅..."
+              className="form-input h-28 resize-none text-base w-full"
+              placeholder="我每月支付Netflix会员89元，从今天开始"
               value={aiDescription}
               onChange={(e) => setAiDescription(e.target.value)}
               disabled={aiLoading}
             ></textarea>
           </div>
-          <div>
+          <div className="flex items-center">
             <button
               type="button"
-              className="btn-accent h-24 px-6"
+              className="btn-accent w-full h-28 px-6 py-4 flex flex-col items-center justify-center space-y-2"
               onClick={handleAiParse}
-              disabled={aiLoading}
+              disabled={aiLoading || !aiDescription.trim()}
             >
               {aiLoading ? (
-                <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                <>
+                  <ArrowPathIcon className="h-6 w-6 animate-spin" />
+                  <span className="text-sm font-medium">AI解析中...</span>
+                </>
               ) : (
-                <PaperAirplaneIcon className="h-5 w-5" />
+                <>
+                  <PaperAirplaneIcon className="h-6 w-6" />
+                  <span className="text-sm font-medium">开始解析</span>
+                </>
               )}
             </button>
           </div>
         </div>
+        
+        {/* 快速示例 */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">快速填充:</span>
+          {[
+            "Netflix会员每月89元",
+            "Adobe年费订阅888元", 
+            "Spotify Premium月费15元",
+            "iCloud存储月费6元"
+          ].map((example, index) => (
+            <button
+              key={index}
+              type="button"
+              className="text-xs px-3 py-1 bg-gray-100 dark:bg-dark-600 text-gray-600 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-dark-500 transition-colors"
+              onClick={() => setAiDescription(example)}
+              disabled={aiLoading}
+            >
+              {example}
+            </button>
+          ))}
+        </div>
       </motion.div>
       
       {/* 订阅表单 */}
-      <div className="bg-white dark:bg-dark-700 rounded-lg shadow-md p-6 border border-gray-100 dark:border-dark-600">
+      <div className="bg-white dark:bg-dark-700 rounded-xl shadow-lg p-6 sm:p-8 border border-gray-100 dark:border-dark-600">
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-8">
             {/* 基本信息 */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-medium text-dark-600 dark:text-white">基本信息</h3>
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium text-dark-600 dark:text-white border-b border-gray-200 dark:border-dark-600 pb-2">基本信息</h3>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  订阅名称 *
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  className="form-input"
-                  placeholder="例如: Netflix、Spotify、iCloud..."
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    订阅名称 *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    className="form-input text-base"
+                    placeholder="例如: Netflix、Spotify、iCloud..."
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    提供商
+                  </label>
+                  <input
+                    type="text"
+                    name="provider"
+                    className="form-input text-base"
+                    placeholder="例如: Netflix, Inc.、Apple、Adobe..."
+                    value={formData.provider}
+                    onChange={handleChange}
+                  />
+                </div>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  提供商
-                </label>
-                <input
-                  type="text"
-                  name="provider"
-                  className="form-input"
-                  placeholder="例如: Netflix, Inc.、Apple、Adobe..."
-                  value={formData.provider}
-                  onChange={handleChange}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   描述
                 </label>
                 <textarea
                   name="description"
-                  className="form-input h-20 resize-none"
+                  className="form-input h-24 resize-none text-base"
                   placeholder="添加有关此订阅的详细信息..."
                   value={formData.description}
                   onChange={handleChange}
@@ -277,19 +306,19 @@ const AddSubscription = () => {
             </div>
             
             {/* 付款信息 */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-medium text-dark-600 dark:text-white">付款信息</h3>
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium text-dark-600 dark:text-white border-b border-gray-200 dark:border-dark-600 pb-2">付款信息</h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     金额 *
                   </label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+                  <div className="relative">
                     <input
                       type="number"
                       name="amount"
-                      className="form-input pr-12"
+                      className="form-input pr-20 text-base"
                       placeholder="0.00"
                       min="0"
                       step="0.01"
@@ -300,7 +329,7 @@ const AddSubscription = () => {
                     <div className="absolute inset-y-0 right-0 flex items-center">
                       <select
                         name="currency"
-                        className="h-full py-0 pl-2 pr-7 border-transparent bg-transparent text-gray-500 dark:text-gray-300 sm:text-sm rounded-md focus:ring-0 focus:border-transparent"
+                        className="h-full py-0 pl-3 pr-8 border-transparent bg-transparent text-gray-500 dark:text-gray-300 text-sm rounded-md focus:ring-0 focus:border-transparent"
                         value={formData.currency}
                         onChange={handleChange}
                       >
@@ -315,12 +344,12 @@ const AddSubscription = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     类别
                   </label>
                   <select
                     name="category"
-                    className="form-select"
+                    className="form-select text-base"
                     value={formData.category}
                     onChange={handleChange}
                   >
@@ -334,14 +363,14 @@ const AddSubscription = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     计费周期 *
                   </label>
                   <select
                     name="billing_cycle"
-                    className="form-select"
+                    className="form-select text-base"
                     value={formData.billing_cycle}
                     onChange={handleChange}
                     required
@@ -355,20 +384,20 @@ const AddSubscription = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     周期次数
                   </label>
                   <input
                     type="number"
                     name="cycle_count"
-                    className="form-input"
+                    className="form-input text-base"
                     placeholder="1"
                     min="1"
                     step="1"
                     value={formData.cycle_count}
                     onChange={handleChange}
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                     例如: 每2个月付款一次，输入2
                   </p>
                 </div>
@@ -376,18 +405,18 @@ const AddSubscription = () => {
             </div>
             
             {/* 日期信息 */}
-            <div className="space-y-4 md:col-span-2">
-              <h3 className="text-lg font-medium text-dark-600 dark:text-white">日期信息</h3>
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium text-dark-600 dark:text-white border-b border-gray-200 dark:border-dark-600 pb-2">日期信息</h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     开始日期 *
                   </label>
                   <input
                     type="date"
                     name="start_date"
-                    className="form-input"
+                    className="form-input text-base"
                     value={formData.start_date}
                     onChange={handleChange}
                     required
@@ -395,13 +424,13 @@ const AddSubscription = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     下次付款日期 *
                   </label>
                   <input
                     type="date"
                     name="next_payment_date"
-                    className="form-input"
+                    className="form-input text-base"
                     value={formData.next_payment_date}
                     onChange={handleChange}
                     required
@@ -409,14 +438,14 @@ const AddSubscription = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     提醒提前天数
                   </label>
                   <select
                     name="reminder_days"
-                    className="form-select"
+                    className="form-select text-base"
                     value={formData.reminder_days}
                     onChange={handleChange}
                   >
@@ -428,38 +457,40 @@ const AddSubscription = () => {
                   </select>
                 </div>
                 
-                <div className="flex items-center h-full pt-6">
+                <div className="flex items-center pt-8">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
                       name="active"
-                      className="form-checkbox"
+                      className="form-checkbox h-5 w-5"
                       checked={formData.active}
                       onChange={handleChange}
                     />
-                    <span className="ml-2 text-gray-700 dark:text-gray-300">活跃订阅</span>
+                    <span className="ml-3 text-base text-gray-700 dark:text-gray-300">活跃订阅</span>
                   </label>
                 </div>
               </div>
             </div>
           </div>
           
-          <div className="mt-8 flex justify-end space-x-3">
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => navigate('/subscriptions')}
-              disabled={loading}
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={loading}
-            >
-              {loading ? '保存中...' : '保存订阅'}
-            </button>
+          <div className="mt-10 pt-6 border-t border-gray-200 dark:border-dark-600">
+            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
+              <button
+                type="button"
+                className="btn-outline px-8 py-3"
+                onClick={() => navigate('/subscriptions')}
+                disabled={loading}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                className="btn-primary px-8 py-3"
+                disabled={loading}
+              >
+                {loading ? '保存中...' : '保存订阅'}
+              </button>
+            </div>
           </div>
         </form>
       </div>
