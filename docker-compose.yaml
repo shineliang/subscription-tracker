@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  subscription-tracker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: subscription-tracker
+    ports:
+      - "3310:80"  # Only expose frontend port
+    environment:
+      - NODE_ENV=production
+      - PORT=5200
+      # Email configuration
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      # LLM API configuration (Claude)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_BASE=${OPENAI_API_BASE}
+      - OPENAI_API_MODEL=${OPENAI_API_MODEL}
+      # Supabase configuration
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+    volumes:
+      # Mount database file location (if using local SQLite)
+      - ./data:/app/backend/data
+      # Mount logs directory for persistent logs
+      - ./logs:/var/log/app
+      # Mount .env file for backend
+      - ./backend/.env:/app/backend/.env:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+  logs:
+    driver: local
