@@ -116,7 +116,7 @@ class Budget {
       UPDATE budgets 
       SET name = ?, amount = ?, currency = ?, warning_threshold = ?, 
           is_active = ?, start_date = ?, end_date = ?, 
-          updated_at = NOW()
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
     `;
     
@@ -149,7 +149,7 @@ class Budget {
   static deleteByUser(id, userId, callback) {
     const query = `
       UPDATE budgets 
-      SET is_active = false, updated_at = NOW() 
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP 
       WHERE id = ? AND user_id = ?
     `;
     
@@ -369,47 +369,17 @@ class Budget {
 
   // 获取未读警告
   static getUnreadAlerts(userId, callback) {
-    // 先获取未读警告
-    const alertQuery = `
-      SELECT * FROM budget_alerts
-      WHERE user_id = ? AND is_read = false
-      ORDER BY created_at DESC
+    const query = `
+      SELECT ba.*, b.name as budget_name, b.type, b.period, b.category
+      FROM budget_alerts ba
+      JOIN budgets b ON ba.budget_id = b.id
+      WHERE ba.user_id = ? AND ba.is_read = false
+      ORDER BY ba.created_at DESC
     `;
     
-    db.all(alertQuery, [userId], (err, alerts) => {
+    db.all(query, [userId], (err, rows) => {
       if (err) return callback(err);
-      if (!alerts || alerts.length === 0) {
-        return callback(null, []);
-      }
-      
-      // 获取相关预算信息
-      const budgetIds = [...new Set(alerts.map(a => a.budget_id))];
-      const promises = budgetIds.map(budgetId => {
-        return new Promise((resolve) => {
-          const budgetQuery = `SELECT * FROM budgets WHERE id = ?`;
-          db.get(budgetQuery, [budgetId], (err, budget) => {
-            resolve(budget || {});
-          });
-        });
-      });
-      
-      Promise.all(promises).then(budgets => {
-        const budgetMap = budgets.reduce((map, b) => {
-          if (b.id) map[b.id] = b;
-          return map;
-        }, {});
-        
-        // 合并数据
-        const enrichedAlerts = alerts.map(alert => ({
-          ...alert,
-          budget_name: budgetMap[alert.budget_id]?.name || '',
-          type: budgetMap[alert.budget_id]?.type || '',
-          period: budgetMap[alert.budget_id]?.period || '',
-          category: budgetMap[alert.budget_id]?.category || ''
-        }));
-        
-        callback(null, enrichedAlerts);
-      });
+      callback(null, rows || []);
     });
   }
 

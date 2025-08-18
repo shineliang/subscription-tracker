@@ -1,0 +1,62 @@
+# Page snapshot
+
+```yaml
+- alert:
+  - img
+  - text: 获取数据失败，请稍后再试
+- button "close"
+- progressbar "notification timer"
+- complementary:
+  - link "订阅管家":
+    - /url: /
+  - navigation:
+    - link "仪表盘":
+      - /url: /
+    - link "所有订阅":
+      - /url: /subscriptions
+    - link "添加订阅":
+      - /url: /subscriptions/add
+    - link "付款历史":
+      - /url: /payments
+    - link "统计分析":
+      - /url: /statistics
+    - link "智能分析":
+      - /url: /analysis
+    - link "预算管理":
+      - /url: /budgets
+    - link "设置":
+      - /url: /settings
+  - paragraph: admin
+  - paragraph: admin@example.com
+  - button "切换暗色模式"
+  - button "退出登录"
+- banner
+- main:
+  - heading "仪表盘" [level=1]
+  - link "添加新订阅":
+    - /url: /subscriptions/add
+    - button "添加新订阅"
+  - heading "月度支出" [level=3]
+  - text: ¥0.00 每月订阅总费用
+  - heading "年度支出" [level=3]
+  - text: ¥0.00 每年订阅总费用
+  - heading "活跃订阅" [level=3]
+  - text: 0 当前活跃订阅数量
+  - heading "即将到期" [level=3]
+  - text: 0 7天内即将到期的订阅
+  - link "智能分析 AI驱动的订阅优化建议和成本分析":
+    - /url: /analysis
+    - heading "智能分析" [level=3]
+    - paragraph: AI驱动的订阅优化建议和成本分析
+  - link "统计报表 查看详细的支出统计和趋势分析":
+    - /url: /statistics
+    - heading "统计报表" [level=3]
+    - paragraph: 查看详细的支出统计和趋势分析
+  - heading "即将到期的订阅" [level=2]
+  - link "查看全部":
+    - /url: /subscriptions
+  - heading "没有即将到期的订阅" [level=3]
+  - paragraph: 添加新的订阅以便我们提醒您即将到期的付款
+  - link "添加订阅":
+    - /url: /subscriptions/add
+```

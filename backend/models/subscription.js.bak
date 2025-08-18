@@ -8,7 +8,7 @@ class Subscription {
   static getAllByUser(userId, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY next_payment_date ASC
     `;
     
@@ -39,7 +39,7 @@ class Subscription {
   static getByIdAndUser(id, userId, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE id = ? AND user_id = ?
+      WHERE id = $1 AND user_id = $2
     `;
     
     db.get(query, [id, userId], (err, row) => {
@@ -54,7 +54,7 @@ class Subscription {
   static getById(id, callback) {
     const query = `
       SELECT * FROM subscriptions 
-      WHERE id = ?
+      WHERE id = $1
     `;
     
     db.get(query, [id], (err, row) => {
@@ -89,7 +89,7 @@ class Subscription {
         user_id, name, description, provider, amount, currency, 
         billing_cycle, cycle_count, start_date, next_payment_date, 
         reminder_days, category, active, cancelled_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `;
     
     db.run(
@@ -160,11 +160,11 @@ class Subscription {
 
       const query = `
         UPDATE subscriptions 
-        SET name = ?, description = ?, provider = ?, amount = ?, 
-            currency = ?, billing_cycle = ?, cycle_count = ?, 
-            start_date = ?, next_payment_date = ?, reminder_days = ?, 
-            category = ?, active = ?, cancelled_at = ?, updated_at = NOW()
-        WHERE id = ? AND user_id = ?
+        SET name = $1, description = $2, provider = $3, amount = $4, 
+            currency = $5, billing_cycle = $6, cycle_count = $7, 
+            start_date = $8, next_payment_date = $9, reminder_days = $10, 
+            category = $11, active = $12, cancelled_at = $13, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $14 AND user_id = $15
       `;
       
       db.run(
@@ -251,21 +251,21 @@ class Subscription {
 
     const query = `
       UPDATE subscriptions 
-      SET name = ?,
-          description = ?,
-          provider = ?,
-          amount = ?,
-          currency = ?,
-          billing_cycle = ?,
-          cycle_count = ?,
-          start_date = ?,
-          next_payment_date = ?,
-          reminder_days = ?,
-          category = ?,
-          active = ?,
-          cancelled_at = ?,
-          updated_at = NOW()
-      WHERE id = ?
+      SET name = $1,
+          description = $2,
+          provider = $3,
+          amount = $4,
+          currency = $5,
+          billing_cycle = $6,
+          cycle_count = $7,
+          start_date = $8,
+          next_payment_date = $9,
+          reminder_days = $10,
+          category = $11,
+          active = $12,
+          cancelled_at = $13,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $14
     `;
     
     db.run(
@@ -302,7 +302,7 @@ class Subscription {
       if (err) return callback(err);
       if (!subscription) return callback(new Error('订阅不存在或无权限'));
       
-      const query = `UPDATE subscriptions SET active = false, updated_at = NOW() WHERE id = ? AND user_id = ?`;
+      const query = `UPDATE subscriptions SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`;
       
       db.run(query, [id, userId], function(err) {
         if (err) {
@@ -333,7 +333,7 @@ class Subscription {
   
   // 删除订阅（不验证用户）
   static delete(id, callback) {
-    const query = `DELETE FROM subscriptions WHERE id = ?`;
+    const query = `DELETE FROM subscriptions WHERE id = $1`;
     
     db.run(query, [id], function(err) {
       if (err) {
@@ -350,8 +350,8 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE user_id = ?
-      AND next_payment_date BETWEEN ? AND ?
+      WHERE user_id = $1
+      AND next_payment_date BETWEEN $2 AND $3
       AND active = true
       AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
@@ -372,7 +372,7 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE next_payment_date BETWEEN ? AND ?
+      WHERE next_payment_date BETWEEN $1 AND $2
       AND active = true
       AND cancelled_at IS NULL
       ORDER BY next_payment_date ASC
@@ -392,7 +392,7 @@ class Subscription {
     
     const query = `
       SELECT * FROM subscriptions 
-      WHERE next_payment_date < ?
+      WHERE next_payment_date < $1
       AND active = true
       ORDER BY next_payment_date ASC
     `;
@@ -408,7 +408,18 @@ class Subscription {
   // 计算每月花费
   static getMonthlySpending(callback) {
     const query = `
-      SELECT amount, currency, billing_cycle
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount
+          WHEN billing_cycle = 'yearly' THEN amount / 12
+          WHEN billing_cycle = 'half_yearly' THEN amount / 6
+          WHEN billing_cycle = 'quarterly' THEN amount / 3
+          WHEN billing_cycle = 'weekly' THEN amount * 4.33
+          WHEN billing_cycle = 'daily' THEN amount * 30.44
+          ELSE amount
+        END as monthly_amount,
+        currency,
+        billing_cycle
       FROM subscriptions
       WHERE active = true
     `;
@@ -418,33 +429,17 @@ class Subscription {
         return callback(err, null);
       }
       
-      // 计算月度金额并按货币分组
+      // 按货币分组计算总额
       const totals = {};
-      const details = rows.map(row => {
-        let monthly_amount = parseFloat(row.amount);
-        
-        // 根据计费周期转换为月度金额
-        switch (row.billing_cycle) {
-          case 'yearly': monthly_amount = monthly_amount / 12; break;
-          case 'half_yearly': monthly_amount = monthly_amount / 6; break;
-          case 'quarterly': monthly_amount = monthly_amount / 3; break;
-          case 'weekly': monthly_amount = monthly_amount * 4.33; break;
-          case 'daily': monthly_amount = monthly_amount * 30.44; break;
-        }
-        
+      rows.forEach(row => {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += monthly_amount;
-        
-        return {
-          ...row,
-          monthly_amount
-        };
+        totals[row.currency] += parseFloat(row.monthly_amount);
       });
       
       callback(null, { 
-        details: details,
+        details: rows,
         totals: totals
       });
     });
@@ -453,7 +448,18 @@ class Subscription {
   // 计算每年花费
   static getYearlySpending(callback) {
     const query = `
-      SELECT amount, currency, billing_cycle
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount * 12
+          WHEN billing_cycle = 'yearly' THEN amount
+          WHEN billing_cycle = 'half_yearly' THEN amount * 2
+          WHEN billing_cycle = 'quarterly' THEN amount * 4
+          WHEN billing_cycle = 'weekly' THEN amount * 52
+          WHEN billing_cycle = 'daily' THEN amount * 365
+          ELSE amount
+        END as yearly_amount,
+        currency,
+        billing_cycle
       FROM subscriptions
       WHERE active = true
     `;
@@ -463,34 +469,17 @@ class Subscription {
         return callback(err, null);
       }
       
-      // 计算年度金额并按货币分组
+      // 按货币分组计算总额
       const totals = {};
-      const details = rows.map(row => {
-        let yearly_amount = parseFloat(row.amount);
-        
-        // 根据计费周期转换为年度金额
-        switch (row.billing_cycle) {
-          case 'monthly': yearly_amount = yearly_amount * 12; break;
-          case 'yearly': yearly_amount = yearly_amount; break;
-          case 'half_yearly': yearly_amount = yearly_amount * 2; break;
-          case 'quarterly': yearly_amount = yearly_amount * 4; break;
-          case 'weekly': yearly_amount = yearly_amount * 52; break;
-          case 'daily': yearly_amount = yearly_amount * 365; break;
-        }
-        
+      rows.forEach(row => {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += yearly_amount;
-        
-        return {
-          ...row,
-          yearly_amount
-        };
+        totals[row.currency] += parseFloat(row.yearly_amount);
       });
       
       callback(null, { 
-        details: details,
+        details: rows,
         totals: totals
       });
     });
@@ -645,9 +634,20 @@ class Subscription {
   // 计算用户的每月花费
   static getMonthlySpendingByUser(userId, callback) {
     const query = `
-      SELECT amount, currency, billing_cycle
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount
+          WHEN billing_cycle = 'yearly' THEN amount / 12
+          WHEN billing_cycle = 'half_yearly' THEN amount / 6
+          WHEN billing_cycle = 'quarterly' THEN amount / 3
+          WHEN billing_cycle = 'weekly' THEN amount * 4.33
+          WHEN billing_cycle = 'daily' THEN amount * 30.44
+          ELSE amount
+        END as monthly_amount,
+        currency,
+        billing_cycle
       FROM subscriptions
-      WHERE active = true AND user_id = ?
+      WHERE active = true AND user_id = $1
     `;
     
     db.all(query, [userId], (err, rows) => {
@@ -655,33 +655,17 @@ class Subscription {
         return callback(err, null);
       }
       
-      // 计算月度金额并按货币分组
+      // 按货币分组计算总额
       const totals = {};
-      const details = rows.map(row => {
-        let monthly_amount = parseFloat(row.amount);
-        
-        // 根据计费周期转换为月度金额
-        switch (row.billing_cycle) {
-          case 'yearly': monthly_amount = monthly_amount / 12; break;
-          case 'half_yearly': monthly_amount = monthly_amount / 6; break;
-          case 'quarterly': monthly_amount = monthly_amount / 3; break;
-          case 'weekly': monthly_amount = monthly_amount * 4.33; break;
-          case 'daily': monthly_amount = monthly_amount * 30.44; break;
-        }
-        
+      rows.forEach(row => {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += monthly_amount;
-        
-        return {
-          ...row,
-          monthly_amount
-        };
+        totals[row.currency] += parseFloat(row.monthly_amount);
       });
       
       callback(null, { 
-        details: details,
+        details: rows,
         totals: totals
       });
     });
@@ -690,9 +674,20 @@ class Subscription {
   // 计算用户的每年花费
   static getYearlySpendingByUser(userId, callback) {
     const query = `
-      SELECT amount, currency, billing_cycle
+      SELECT 
+        CASE
+          WHEN billing_cycle = 'monthly' THEN amount * 12
+          WHEN billing_cycle = 'yearly' THEN amount
+          WHEN billing_cycle = 'half_yearly' THEN amount * 2
+          WHEN billing_cycle = 'quarterly' THEN amount * 4
+          WHEN billing_cycle = 'weekly' THEN amount * 52
+          WHEN billing_cycle = 'daily' THEN amount * 365
+          ELSE amount
+        END as yearly_amount,
+        currency,
+        billing_cycle
       FROM subscriptions
-      WHERE active = true AND user_id = ?
+      WHERE active = true AND user_id = $1
     `;
     
     db.all(query, [userId], (err, rows) => {
@@ -700,34 +695,17 @@ class Subscription {
         return callback(err, null);
       }
       
-      // 计算年度金额并按货币分组
+      // 按货币分组计算总额
       const totals = {};
-      const details = rows.map(row => {
-        let yearly_amount = parseFloat(row.amount);
-        
-        // 根据计费周期转换为年度金额
-        switch (row.billing_cycle) {
-          case 'monthly': yearly_amount = yearly_amount * 12; break;
-          case 'yearly': yearly_amount = yearly_amount; break;
-          case 'half_yearly': yearly_amount = yearly_amount * 2; break;
-          case 'quarterly': yearly_amount = yearly_amount * 4; break;
-          case 'weekly': yearly_amount = yearly_amount * 52; break;
-          case 'daily': yearly_amount = yearly_amount * 365; break;
-        }
-        
+      rows.forEach(row => {
         if (!totals[row.currency]) {
           totals[row.currency] = 0;
         }
-        totals[row.currency] += yearly_amount;
-        
-        return {
-          ...row,
-          yearly_amount
-        };
+        totals[row.currency] += parseFloat(row.yearly_amount);
       });
       
       callback(null, { 
-        details: details,
+        details: rows,
         totals: totals
       });
     });
@@ -763,7 +741,7 @@ class Subscription {
         SUM(${amountExpression}) as total_amount,
         currency
       FROM subscriptions
-      WHERE active = true AND user_id = ?
+      WHERE active = true AND user_id = $1
       GROUP BY category, currency
     `;
     
@@ -845,7 +823,7 @@ class Subscription {
             start_date,
             next_payment_date
           FROM subscriptions
-          WHERE active = true AND user_id = ?
+          WHERE active = true AND user_id = $1
         `;
         
         db.all(query, [userId], (err, subscriptions) => {

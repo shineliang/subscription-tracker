@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { toast } from 'react-toastify';
-import { UserIcon, LockClosedIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { CreditCardIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { authAPI } from '../services/api';
-import Card from './ui/Card';
-import { Button } from './ui/Button';
-import { Input } from './ui/Input';
-import { Switch } from './ui/Switch';
-import { staggerContainer, staggerItem } from '../utils/animations';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -59,149 +54,155 @@ const Login = () => {
   const fillDemoAccount = () => {
     setUsername('admin');
     setPassword('admin123');
-    toast.info('已填充演示账号，密码：admin123');
+    toast.info('已填充演示账号');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Animated background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-secondary-50 to-accent-50 dark:from-black dark:via-neutral-950 dark:to-primary-950">
-        <div className="absolute inset-0 bg-gradient-mesh opacity-30" />
-      </div>
-      
-      {/* Floating orbs */}
-      <motion.div
-        className="absolute top-20 left-20 w-72 h-72 bg-primary-500/20 rounded-full blur-3xl"
-        animate={{
-          x: [0, 100, 0],
-          y: [0, -100, 0],
-        }}
-        transition={{
-          duration: 20,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-      />
-      <motion.div
-        className="absolute bottom-20 right-20 w-96 h-96 bg-secondary-500/20 rounded-full blur-3xl"
-        animate={{
-          x: [0, -100, 0],
-          y: [0, 100, 0],
-        }}
-        transition={{
-          duration: 25,
-          repeat: Infinity,
-          ease: "linear",
-        }}
-      />
-      
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="relative z-10 max-w-md w-full px-6"
-      >
-        <motion.div variants={staggerItem} className="text-center mb-8">
-          <motion.h2 
-            className="text-4xl font-display font-bold text-gradient-animate mb-2"
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 20 }}
-          >
-            欢迎回来
-          </motion.h2>
-          <p className="text-neutral-600 dark:text-neutral-400">
-            还没有账号？{' '}
-            <Link to="/register" className="font-medium text-primary-500 hover:text-primary-400 transition-colors">
-              立即注册
-            </Link>
-          </p>
-        </motion.div>
-        <Card variant="glass" padding="lg" glow>
-          <form className="space-y-6" onSubmit={handleLogin}>
-            <motion.div variants={staggerItem}>
-              <Input
-                id="username"
-                name="username"
-                type="text"
-                label="用户名或邮箱"
-                icon={<UserIcon className="w-5 h-5" />}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoComplete="username"
-                variant="glass"
-              />
-            </motion.div>
-            
-            <motion.div variants={staggerItem}>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                label="密码"
-                icon={<LockClosedIcon className="w-5 h-5" />}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                variant="glass"
-              />
-            </motion.div>
+    <div className="min-h-screen flex">
+      {/* Left side - Login form */}
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-md w-full space-y-8">
+          {/* Logo and title */}
+          <div className="text-center">
+            <div className="flex justify-center mb-6">
+              <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                <CreditCardIcon className="w-7 h-7 text-white" />
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              欢迎回来
+            </h2>
+            <p className="text-gray-600">
+              还没有账号？{' '}
+              <Link to="/register" className="font-medium text-blue-500 hover:text-blue-400 transition-colors">
+                立即注册
+              </Link>
+            </p>
+          </div>
 
-            <motion.div variants={staggerItem} className="flex items-center justify-between">
-              <Switch
-                id="remember-me"
-                checked={rememberMe}
-                onChange={setRememberMe}
-                label="记住我"
-                size="sm"
-              />
+          {/* Login form */}
+          <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+            <div className="space-y-4">
+              <div>
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  required
+                  className="appearance-none relative block w-full px-4 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="用户名或邮箱"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                />
+              </div>
               
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={fillDemoAccount}
-                icon={<SparklesIcon className="w-4 h-4" />}
-                iconPosition="left"
-              >
-                演示账号
-              </Button>
-            </motion.div>
+              <div className="relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  required
+                  className="appearance-none relative block w-full px-4 py-3 pr-12 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="密码"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-5 w-5 text-gray-400" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
+            </div>
 
-            <motion.div variants={staggerItem}>
-              <Button
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  className="h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
+                  记住我
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <button
+                  type="button"
+                  onClick={fillDemoAccount}
+                  className="font-medium text-blue-500 hover:text-blue-400 transition-colors"
+                >
+                  使用演示账号
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <button
                 type="submit"
-                variant="gradient"
-                size="lg"
-                className="w-full"
-                loading={loading}
-                glow
+                disabled={loading}
+                className={`group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white ${
+                  loading 
+                    ? 'bg-blue-400 cursor-not-allowed' 
+                    : 'bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                } transition-colors`}
               >
-                登录账户
-              </Button>
-            </motion.div>
+                {loading ? '登录中...' : '登录'}
+              </button>
+            </div>
 
-            <motion.div variants={staggerItem} className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-neutral-200 dark:border-neutral-800" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white/50 dark:bg-black/50 backdrop-blur-sm text-neutral-500 rounded-full">
-                  或者
-                </span>
-              </div>
-            </motion.div>
-            
-            <motion.div variants={staggerItem} className="text-center">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                首次使用？创建账号开始管理您的订阅
+            <div className="text-center">
+              <p className="text-sm text-gray-600">
+                登录即表示同意我们的服务条款和隐私政策
               </p>
-            </motion.div>
+            </div>
           </form>
-        </Card>
-      </motion.div>
+        </div>
+      </div>
+
+      {/* Right side - Decorative pattern */}
+      <div className="hidden lg:block lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
+        <div className="absolute inset-0 flex items-center justify-center p-12">
+          <div className="text-center text-white">
+            <div className="mb-8">
+              <CreditCardIcon className="w-20 h-20 mx-auto mb-6 opacity-80" />
+              <h3 className="text-3xl font-bold mb-4">订阅管家</h3>
+              <p className="text-xl opacity-90 leading-relaxed">
+                智能管理您的所有订阅服务<br />
+                追踪费用，永不错过续费提醒
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <div className="text-2xl font-bold">500+</div>
+                <div className="text-sm opacity-80">支持的服务</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <div className="text-2xl font-bold">99%</div>
+                <div className="text-sm opacity-80">准确率</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Pattern elements */}
+        <div className="absolute top-10 right-10 w-32 h-32 bg-white/5 rounded-full"></div>
+        <div className="absolute bottom-10 left-10 w-48 h-48 bg-white/5 rounded-full"></div>
+        <div className="absolute top-1/2 right-20 w-20 h-20 bg-white/5 rounded-full"></div>
+      </div>
     </div>
   );
 };

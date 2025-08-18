@@ -14,7 +14,7 @@ class User {
 
       // 检查用户名是否已存在
       const existingUser = await new Promise((resolve, reject) => {
-        db.get(`SELECT id FROM users WHERE username = ? OR email = ?`,
+        db.get(`SELECT id FROM users WHERE username = $1 OR email = $2`,
           [username, email],
           (err, row) => {
             if (err) reject(err);
@@ -34,7 +34,7 @@ class User {
       // 插入新用户
       const query = `
         INSERT INTO users (username, email, password_hash, full_name)
-        VALUES (?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4)
       `;
       
       db.run(query, [username, email, passwordHash, full_name || null], function(err) {
@@ -56,7 +56,7 @@ class User {
     const query = `
       SELECT id, username, email, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE id = ?
+      WHERE id = $1
     `;
     
     db.get(query, [id], (err, user) => {
@@ -69,7 +69,7 @@ class User {
     const query = `
       SELECT id, username, email, password_hash, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE username = ?
+      WHERE username = $1
     `;
     
     db.get(query, [username], (err, user) => {
@@ -82,7 +82,7 @@ class User {
     const query = `
       SELECT id, username, email, password_hash, full_name, is_active, created_at, updated_at, last_login_at
       FROM users
-      WHERE email = ?
+      WHERE email = $1
     `;
     
     db.get(query, [email], (err, user) => {
@@ -102,15 +102,15 @@ class User {
     const values = [];
 
     if (email !== undefined) {
-      updates.push('email = ?');
+      updates.push('email = $' + (values.length + 1));
       values.push(email);
     }
     if (full_name !== undefined) {
-      updates.push('full_name = ?');
+      updates.push('full_name = $' + (values.length + 1));
       values.push(full_name);
     }
     if (is_active !== undefined) {
-      updates.push('is_active = ?');
+      updates.push('is_active = $' + (values.length + 1));
       values.push(is_active);
     }
 
@@ -118,13 +118,13 @@ class User {
       return callback(new Error('没有要更新的字段'));
     }
 
-    updates.push('updated_at = NOW()');
+    updates.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
     const query = `
       UPDATE users
       SET ${updates.join(', ')}
-      WHERE id = ?
+      WHERE id = $${values.length}
     `;
 
     db.run(query, values, function(err) {
@@ -148,8 +148,8 @@ class User {
 
       const query = `
         UPDATE users
-        SET password_hash = ?, updated_at = NOW()
-        WHERE id = ?
+        SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
       `;
 
       db.run(query, [passwordHash, id], function(err) {
@@ -172,8 +172,8 @@ class User {
   static updateLastLogin(id, callback) {
     const query = `
       UPDATE users
-      SET last_login_at = NOW()
-      WHERE id = ?
+      SET last_login_at = CURRENT_TIMESTAMP
+      WHERE id = $1
     `;
 
     db.run(query, [id], (err) => {
@@ -185,8 +185,8 @@ class User {
   static delete(id, callback) {
     const query = `
       UPDATE users
-      SET is_active = false, updated_at = NOW()
-      WHERE id = ?
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
     `;
 
     db.run(query, [id], function(err) {
@@ -205,24 +205,16 @@ class User {
   // 获取用户的订阅统计
   static getStatistics(userId, callback) {
     const query = `
-      SELECT * FROM subscriptions
-      WHERE user_id = ?
+      SELECT 
+        COUNT(*) as total_subscriptions,
+        COUNT(CASE WHEN active = true THEN 1 END) as active_subscriptions,
+        SUM(CASE WHEN active = true THEN amount ELSE 0 END) as total_monthly_amount
+      FROM subscriptions
+      WHERE user_id = $1
     `;
 
-    db.all(query, [userId], (err, subscriptions) => {
-      if (err) return callback(err, null);
-      
-      // 在 JavaScript 中计算统计数据
-      const stats = {
-        total_subscriptions: subscriptions ? subscriptions.length : 0,
-        active_subscriptions: subscriptions ? subscriptions.filter(s => s.active).length : 0,
-        total_monthly_amount: subscriptions ? 
-          subscriptions
-            .filter(s => s.active)
-            .reduce((sum, s) => sum + parseFloat(s.amount || 0), 0) : 0
-      };
-      
-      callback(null, stats);
+    db.get(query, [userId], (err, stats) => {
+      callback(err, stats);
     });
   }
 }

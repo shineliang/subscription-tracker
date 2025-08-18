@@ -5,7 +5,7 @@ class NotificationSetting {
   static getByUser(userId, callback) {
     const query = `
       SELECT * FROM notification_settings
-      WHERE user_id = ?
+      WHERE user_id = $1
     `;
     
     db.get(query, [userId], (err, row) => {
@@ -46,7 +46,7 @@ class NotificationSetting {
     const query = `
       INSERT INTO notification_settings 
       (user_id, email, notify_days_before, email_notifications, browser_notifications)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `;
     
     db.run(
@@ -101,12 +101,12 @@ class NotificationSetting {
         // 存在，更新设置
         const query = `
           UPDATE notification_settings
-          SET email = ?,
-              notify_days_before = ?,
-              email_notifications = ?,
-              browser_notifications = ?,
-              updated_at = NOW()
-          WHERE user_id = ?
+          SET email = $1,
+              notify_days_before = $2,
+              email_notifications = $3,
+              browser_notifications = $4,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE user_id = $5
         `;
         
         db.run(

@@ -10,7 +10,7 @@ class Reminder {
       SELECT r.*, s.name, s.amount, s.currency, s.next_payment_date
       FROM reminders r
       JOIN subscriptions s ON r.subscription_id = s.id
-      WHERE r.reminder_date <= ? 
+      WHERE r.reminder_date <= $1 
       AND r.sent = 0
       AND s.active = 1
     `;
@@ -29,7 +29,7 @@ class Reminder {
 
     const query = `
       INSERT INTO reminders (subscription_id, reminder_date)
-      VALUES (?, ?)
+      VALUES ($1, $2)
     `;
     
     db.run(query, [subscription_id, reminder_date], function(err) {
@@ -45,7 +45,7 @@ class Reminder {
     const query = `
       UPDATE reminders
       SET sent = 1
-      WHERE id = ?
+      WHERE id = $1
     `;
     
     db.run(query, [id], function(err) {
@@ -71,7 +71,7 @@ class Reminder {
     // 先删除该订阅的未发送提醒
     const deleteQuery = `
       DELETE FROM reminders
-      WHERE subscription_id = ? AND sent = 0
+      WHERE subscription_id = $1 AND sent = 0
     `;
     
     db.run(deleteQuery, [subscriptionId], (err) => {
