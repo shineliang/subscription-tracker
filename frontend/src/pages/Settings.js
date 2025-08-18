@@ -13,15 +13,22 @@ import {
   ArrowUpTrayIcon,
   DocumentIcon,
   KeyIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  UserCircleIcon
 } from '@heroicons/react/24/outline';
 import Loader from '../components/Loader';
-import { notificationAPI, dataAPI } from '../services/api';
+import { notificationAPI, dataAPI, authAPI } from '../services/api';
 import axios from 'axios';
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [userProfile, setUserProfile] = useState({
+    username: '',
+    email: '',
+    full_name: ''
+  });
   const [settings, setSettings] = useState({
     email: '',
     notify_days_before: 7,
@@ -29,11 +36,24 @@ const Settings = () => {
     browser_notifications: true
   });
   
-  // 获取设置
+  // 获取设置和用户信息
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // 获取用户信息
+        const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          setUserProfile({
+            username: user.username || '',
+            email: user.email || '',
+            full_name: user.full_name || ''
+          });
+        }
+        
+        // 获取通知设置
         const response = await notificationAPI.getSettings();
         
         setSettings({
@@ -49,7 +69,7 @@ const Settings = () => {
       }
     };
     
-    fetchSettings();
+    fetchData();
   }, []);
   
   const handleChange = (e) => {
@@ -58,6 +78,14 @@ const Settings = () => {
     setSettings((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+  
+  const handleProfileChange = (e) => {
+    const { name, value } = e.target;
+    setUserProfile((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
   
@@ -112,6 +140,44 @@ const Settings = () => {
     }
   };
   
+  const handleSaveProfile = async () => {
+    try {
+      setSavingProfile(true);
+      
+      // 更新用户信息
+      const response = await authAPI.updateProfile({
+        email: userProfile.email,
+        full_name: userProfile.full_name
+      });
+      
+      // 更新本地存储的用户信息
+      const updatedUser = response.data.user;
+      const currentUser = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+      const newUser = { ...currentUser, ...updatedUser };
+      
+      if (localStorage.getItem('user')) {
+        localStorage.setItem('user', JSON.stringify(newUser));
+      }
+      if (sessionStorage.getItem('user')) {
+        sessionStorage.setItem('user', JSON.stringify(newUser));
+      }
+      
+      // 触发用户信息更新事件
+      window.dispatchEvent(new CustomEvent('userUpdated'));
+      
+      toast.success('个人信息已更新');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      if (error.response?.data?.error) {
+        toast.error(error.response.data.error);
+      } else {
+        toast.error('更新个人信息失败，请稍后再试');
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+  
   const handleReset = () => {
     setSettings({
       email: '',
@@ -137,6 +203,79 @@ const Settings = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
+        {/* 个人信息 */}
+        <div className="p-6">
+          <div className="flex items-center mb-4">
+            <UserCircleIcon className="h-6 w-6 text-primary-500 mr-2" />
+            <h2 className="text-lg font-semibold text-dark-600 dark:text-white">个人信息</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                用户名
+              </label>
+              <input
+                type="text"
+                name="username"
+                className="form-input bg-gray-100 dark:bg-gray-800"
+                value={userProfile.username}
+                disabled
+              />
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                用户名不可修改
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                邮箱地址
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <EnvelopeIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                </div>
+                <input
+                  type="email"
+                  name="email"
+                  className="form-input pl-10"
+                  placeholder="your@email.com"
+                  value={userProfile.email}
+                  onChange={handleProfileChange}
+                />
+              </div>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                用于接收通知和找回密码
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                姓名
+              </label>
+              <input
+                type="text"
+                name="full_name"
+                className="form-input"
+                placeholder="请输入您的姓名"
+                value={userProfile.full_name}
+                onChange={handleProfileChange}
+              />
+            </div>
+            
+            <div className="pt-4">
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+              >
+                {savingProfile ? '保存中...' : '保存个人信息'}
+              </button>
+            </div>
+          </div>
+        </div>
+        
         {/* 通知设置 */}
         <div className="p-6">
           <div className="flex items-center mb-4">
@@ -393,7 +532,7 @@ const Settings = () => {
         </button>
       </div>
       
-      {saving && <Loader fullScreen />}
+      {(saving || savingProfile) && <Loader fullScreen />}
     </div>
   );
 };
